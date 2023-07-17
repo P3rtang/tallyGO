@@ -1,0 +1,33 @@
+window {
+    background: #303030;
+}
+
+.counterTreeView {
+    padding: 8px;
+}
+
+.counterTreeView .counterRow {
+    margin-top: 4px;
+}
+
+.counterTreeView expander {
+    padding-left: 6px;
+}
+
+.counterTreeView row {
+    border-radius: 24px;
+}
+
+.treeViewShim {
+    margin: 2px;
+    font-size: 0px;
+}
+
+.counterTreeView label {
+    font-size: 16px;
+    padding: 5px;
+}
+
+.phaseLabel {
+    margin-left: 36px;
+}

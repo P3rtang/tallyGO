@@ -1,0 +1,23 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- Created with Cambalache 0.12.1 -->
+<interface>
+    <!-- interface-name go-counter.ui -->
+    <requires lib="gtk" version="4.10"/>
+    <object class="GtkLabel" id="labelCounter">
+        <property name="label">None Selected</property>
+        <property name="hexpand">True</property>
+        <property name="vexpand">True</property>
+    </object>
+    <object class="GtkEntry" id="entryNumericAddCounter">
+        <property name="margin-bottom">10</property>
+        <property name="margin-end">10</property>
+        <property name="margin-start">10</property>
+        <property name="margin-top">10</property>
+    </object>
+    <object class="GtkButton" id="buttonAddCounter">
+        <property name="label">+</property>
+        <property name="margin-bottom">10</property>
+        <property name="margin-end">10</property>
+        <property name="margin-top">10</property>
+    </object>
+</interface>
