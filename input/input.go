@@ -47,7 +47,7 @@ func (self DevInput) HasEvent() bool {
 func (self DevInput) Init() (err error) {
 	go func() {
 		for self.isRunning {
-			dev, err := evdev.Open("/dev/input/by-id/usb-Logitech_G413_Carbon_Mechanical_Gaming_Keyboard_0C6A30553833-event-kbd")
+			dev, err := evdev.Open("/dev/input/event18")
 			events, err := dev.Read()
 			if err != nil || events == nil {
 				continue

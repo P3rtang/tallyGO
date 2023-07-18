@@ -1,4 +1,4 @@
-module example/hello
+module tallyGo
 
 go 1.20
 

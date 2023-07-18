@@ -1,10 +1,11 @@
 package main
 
 import (
-	"example/hello/input"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
+	"tallyGo/input"
 	"time"
 
 	_ "embed"
@@ -53,6 +54,10 @@ func newHomeApplicationWindow(app *gtk.Application) (window HomeApplicationWindo
 		newCounter("test1", 0),
 		newCounter("test2", 0),
 	}
+
+	jsonData, _ := json.Marshal(counters)
+	println(fmt.Sprintf("%q", jsonData))
+
 	counterTV := newCounterTreeView(counters, counterLabel)
 	revealer := gtk.NewRevealer()
 	revealer.SetTransitionType(gtk.RevealerTransitionTypeSlideRight)
@@ -111,37 +116,37 @@ func newHomeApplicationWindow(app *gtk.Application) (window HomeApplicationWindo
 }
 
 type Counter struct {
-	name      string
-	phaseList []Phase
+	Name   string
+	Phases []Phase
 }
 
 func newCounter(name string, initValue int) *Counter {
 	return &Counter{
 		name,
-		[]Phase{Phase{"Phase_1", initValue, time.Duration(0)}},
+		[]Phase{{"Phase_1", initValue, time.Duration(0)}},
 	}
 }
 
 func (self *Counter) NewPhase() *Phase {
-	phaseName := fmt.Sprintf("Phase_%d", len(self.phaseList)+1)
+	phaseName := fmt.Sprintf("Phase_%d", len(self.Phases)+1)
 	newPhase := Phase{
 		phaseName,
 		0,
 		time.Duration(0),
 	}
-	self.phaseList = append(self.phaseList, newPhase)
+	self.Phases = append(self.Phases, newPhase)
 
 	return &newPhase
 }
 
 type Phase struct {
-	name  string
-	count int
-	time  time.Duration
+	Name  string
+	Count int
+	Time  time.Duration
 }
 
 func (self *Phase) IncreaseBy(add int) {
-	self.count += add
+	self.Count += add
 }
 
 func createColumn(title string, id int) *gtk.TreeViewColumn {
@@ -189,7 +194,7 @@ func newCounterTreeView(cList []*Counter, mainLabel *LabelMainShowCount) (this C
 	tv.SetSizeRequest(360, 0)
 
 	for _, counter := range cList {
-		expander := newCounterExpander(counter, &this)
+		expander := newCounterExpander(counter)
 		this.counters = append(this.counters, expander)
 		store.Append(expander.Object)
 		sep := gtk.NewSeparator(gtk.OrientationHorizontal)
@@ -207,14 +212,14 @@ func (self *CounterTreeView) newSelection(position uint, nItems uint) {
 	case 0:
 		exp := row.Item().Cast().(*gtk.TreeExpander)
 		counter = getCounterFromExpander(exp, self.counters).counter
-		phaseNum = uint(len(counter.phaseList))
+		phaseNum = uint(len(counter.Phases))
 		self.mainLabel.SetCounter(counter)
 	case 1:
 		parentRow := row.Parent()
 		exp := parentRow.Item().Cast().(*gtk.TreeExpander)
 		counter = getCounterFromExpander(exp, self.counters).counter
 		phaseNum = row.Position() - parentRow.Position()
-		self.mainLabel.SetPhase(&counter.phaseList[phaseNum-1])
+		self.mainLabel.SetPhase(&counter.Phases[phaseNum-1])
 	}
 }
 
@@ -255,7 +260,7 @@ func bindRow(listItem *gtk.ListItem) {
 
 func getCounterFromExpander(expander *gtk.TreeExpander, counters []*CounterExpander) (counter *CounterExpander) {
 	for _, c := range counters {
-		if !(c.counter.name == getStringFromExpander(expander)) {
+		if !(c.counter.Name == getStringFromExpander(expander)) {
 			continue
 		}
 		counter = c
@@ -273,7 +278,7 @@ type CounterExpander struct {
 	store   *gio.ListStore
 }
 
-func newCounterExpander(counter *Counter, cTreeView *CounterTreeView) *CounterExpander {
+func newCounterExpander(counter *Counter) *CounterExpander {
 	if counter == nil {
 		return nil
 	}
@@ -283,7 +288,7 @@ func newCounterExpander(counter *Counter, cTreeView *CounterTreeView) *CounterEx
 	box := gtk.NewBox(gtk.OrientationHorizontal, 0)
 	box.AddCSSClass("counterBoxRow")
 
-	label := gtk.NewLabel(counter.name)
+	label := gtk.NewLabel(counter.Name)
 	label.SetHExpand(true)
 	label.SetXAlign(0)
 	button := gtk.NewButtonWithLabel("+")
@@ -298,7 +303,7 @@ func newCounterExpander(counter *Counter, cTreeView *CounterTreeView) *CounterEx
 
 	expander.SetChild(box)
 
-	for _, phase := range counter.phaseList {
+	for _, phase := range counter.Phases {
 		label := newPhaseLabel(&phase)
 		store.Append(label.Object)
 	}
@@ -321,7 +326,7 @@ func newPhaseLabel(phase *Phase) *PhaseLabel {
 	if phase == nil {
 		return nil
 	}
-	label := gtk.NewLabel(phase.name)
+	label := gtk.NewLabel(phase.Name)
 	label.AddCSSClass("phaseLabel")
 	label.SetHAlign(gtk.AlignStart)
 	phaseLabel := PhaseLabel{
@@ -352,7 +357,7 @@ func (self *LabelMainShowCount) IncreaseBy(add int) {
 		self.phase.IncreaseBy(add)
 	}
 	if self.counter != nil {
-		self.counter.phaseList[len(self.counter.phaseList)-1].IncreaseBy(add)
+		self.counter.Phases[len(self.counter.Phases)-1].IncreaseBy(add)
 	}
 	self.Label.SetText(self.String())
 }
@@ -371,12 +376,12 @@ func (self *LabelMainShowCount) SetPhase(phase *Phase) {
 
 func (self *LabelMainShowCount) String() string {
 	if self.phase != nil {
-		return fmt.Sprintf("%d", self.phase.count)
+		return fmt.Sprintf("%d", self.phase.Count)
 	}
 	if self.counter != nil {
 		var sum int
-		for _, phase := range self.counter.phaseList {
-			sum += phase.count
+		for _, phase := range self.counter.Phases {
+			sum += phase.Count
 		}
 		return fmt.Sprintf("%d", sum)
 	}
