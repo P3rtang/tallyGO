@@ -30,6 +30,11 @@ func activate(app *gtk.Application) (err error) {
 	return
 }
 
+func getMainLabel() *gtk.Label {
+	builder := gtk.NewBuilderFromFile("counter.ui")
+	return builder.GetObject("labelCounter").Cast().(*gtk.Label)
+}
+
 type HomeApplicationWindow struct {
 	*gtk.Window
 }
@@ -40,7 +45,7 @@ func newHomeApplicationWindow(app *gtk.Application) (window HomeApplicationWindo
 	window.SetTitle("Counter")
 
 	mainGrid := gtk.NewGrid()
-	counterLabel := newCounterLabel(builder.GetObject("labelCounter").Cast().(*gtk.Label))
+	counterLabel := newCounterLabel(getMainLabel(), nil, nil)
 	button := builder.GetObject("buttonAddCounter").Cast().(*gtk.Button)
 	addInput := newNumericEntry(builder.GetObject("entryNumericAddCounter").Cast().(*gtk.Entry))
 	counters := []*Counter{
@@ -63,7 +68,7 @@ func newHomeApplicationWindow(app *gtk.Application) (window HomeApplicationWindo
 
 	css := gtk.NewCSSProvider()
 	css.LoadFromPath("counter.css")
-	gtk.StyleContextAddProviderForDisplay(gdk.DisplayGetDefault(), css, 0)
+	gtk.StyleContextAddProviderForDisplay(gdk.DisplayGetDefault(), css, gtk.STYLE_PROVIDER_PRIORITY_SETTINGS)
 
 	mainGrid.Attach(counterLabel.Label, 1, 0, 2, 1)
 	mainGrid.Attach(button, 2, 1, 1, 1)
@@ -100,6 +105,18 @@ func newCounter(name string, initValue int) *Counter {
 	}
 }
 
+func (self *Counter) NewPhase() *Phase {
+	phaseName := fmt.Sprintf("Phase_%d", len(self.phaseList)+1)
+	newPhase := Phase{
+		phaseName,
+		0,
+		time.Duration(0),
+	}
+	self.phaseList = append(self.phaseList, newPhase)
+
+	return &newPhase
+}
+
 type Phase struct {
 	name  string
 	count int
@@ -124,14 +141,17 @@ func createColumn(title string, id int) *gtk.TreeViewColumn {
 
 type CounterTreeView struct {
 	*gtk.ListView
+	store     *gio.ListStore
 	selection *gtk.SingleSelection
-	counters  []*Counter
+	counters  []*CounterExpander
 	mainLabel *CounterLabel
 }
 
 func newCounterTreeView(cList []*Counter, mainLabel *CounterLabel) (this CounterTreeView) {
 	store := gio.NewListStore(glib.TypeObject)
-	this = CounterTreeView{nil, nil, cList, mainLabel}
+	var expanderList []*CounterExpander
+
+	this = CounterTreeView{nil, store, nil, expanderList, mainLabel}
 
 	treeStore := gtk.NewTreeListModel(store, false, true, this.createTreeModel)
 	ssel := gtk.NewSingleSelection(treeStore)
@@ -146,62 +166,49 @@ func newCounterTreeView(cList []*Counter, mainLabel *CounterLabel) (this Counter
 	factory.ConnectBind(bindRow)
 	tv.SetFactory(&factory.ListItemFactory)
 
+	ssel.SetAutoselect(false)
 	ssel.ConnectSelectionChanged(this.newSelection)
 
 	tv.SetSizeRequest(360, 0)
 
 	for _, counter := range cList {
-		expander := newCounterExpander(counter)
+		expander := newCounterExpander(counter, &this)
+		this.counters = append(this.counters, expander)
 		store.Append(expander.Object)
+		sep := gtk.NewSeparator(gtk.OrientationHorizontal)
+		store.Append(sep.Object)
 	}
 
 	return
 }
 
-func (self CounterTreeView) newSelection(position uint, nItems uint) {
+func (self *CounterTreeView) newSelection(position uint, nItems uint) {
 	fmt.Printf("selected %d\n", self.selection.Selected())
 	row := self.selection.Item(self.selection.Selected()).Cast().(*gtk.TreeListRow)
+	var phaseNum uint
+	var counter *Counter
 	switch row.Depth() {
 	case 0:
 		exp := row.Item().Cast().(*gtk.TreeExpander)
-		lbl := exp.Child().(*gtk.Label)
-		for _, counter := range self.counters {
-			if counter.name != lbl.Text() {
-				continue
-			}
-			self.mainLabel.ChangePhase(&counter.phaseList[len(counter.phaseList)-1])
-		}
+		counter = getCounterFromExpander(exp, self.counters).counter
+		phaseNum = uint(len(counter.phaseList))
+		self.mainLabel.SetCounter(counter)
 	case 1:
 		parentRow := row.Parent()
 		exp := parentRow.Item().Cast().(*gtk.TreeExpander)
-		lbl := exp.Child().(*gtk.Label)
-		for _, counter := range self.counters {
-			if counter.name != lbl.Text() {
-				continue
-			}
-			phaseNum := row.Position() - parentRow.Position()
-			self.mainLabel.ChangePhase(&counter.phaseList[phaseNum-1])
-		}
+		counter = getCounterFromExpander(exp, self.counters).counter
+		phaseNum = row.Position() - parentRow.Position()
+		self.mainLabel.SetPhase(&counter.phaseList[phaseNum-1])
 	}
-
 }
 
-func (self CounterTreeView) createTreeModel(gObj *glib.Object) *gio.ListModel {
+func (self *CounterTreeView) createTreeModel(gObj *glib.Object) *gio.ListModel {
 	if gObj.Type().Name() != "GtkTreeExpander" {
 		return nil
 	}
-	expander, _ := gObj.Cast().(*gtk.TreeExpander)
 
-	store := gio.NewListStore(glib.TypeObject)
-	for _, counter := range self.counters {
-		if !(counter.name == expander.Child().(*gtk.Label).Text()) {
-			continue
-		}
-		for _, phase := range counter.phaseList {
-			label := newPhaseLabel(&phase)
-			store.Append(label.Object)
-		}
-	}
+	expander, _ := gObj.Cast().(*gtk.TreeExpander)
+	store := getCounterFromExpander(expander, self.counters).store
 
 	return &store.ListModel
 }
@@ -222,25 +229,66 @@ func bindRow(listItem *gtk.ListItem) {
 	case "GtkLabel":
 		label := row.Item().Cast().(*gtk.Label)
 		listItem.SetChild(label)
+	case "GtkSeparator":
+		listItem.SetSelectable(false)
+		listItem.SetActivatable(false)
+		sep := row.Item().Cast().(*gtk.Separator)
+		listItem.SetChild(sep)
 	}
+}
+
+func getCounterFromExpander(expander *gtk.TreeExpander, counters []*CounterExpander) (counter *CounterExpander) {
+	for _, c := range counters {
+		if c.TreeExpander == expander {
+			continue
+		}
+		counter = c
+	}
+	return
 }
 
 type CounterExpander struct {
 	*gtk.TreeExpander
 	counter *Counter
+	store   *gio.ListStore
 }
 
-func newCounterExpander(counter *Counter) *CounterExpander {
+func newCounterExpander(counter *Counter, cTreeView *CounterTreeView) *CounterExpander {
 	if counter == nil {
 		return nil
 	}
 	expander := gtk.NewTreeExpander()
+	store := gio.NewListStore(glib.TypeObject)
+
+	box := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	box.AddCSSClass("counterBoxRow")
+
 	label := gtk.NewLabel(counter.name)
-	expander.SetChild(label)
+	label.SetHExpand(true)
+	label.SetXAlign(0)
+	button := gtk.NewButtonWithLabel("+")
+	button.SetName("buttonAddPhase")
+	button.ConnectClicked(func() {
+		phase := counter.NewPhase()
+		store.Append(newPhaseLabel(phase).Object)
+	})
+
+	box.Append(label)
+	box.Append(button)
+
+	expander.SetChild(box)
+
+	for _, phase := range counter.phaseList {
+		label := newPhaseLabel(&phase)
+		store.Append(label.Object)
+	}
+
 	counterExpander := CounterExpander{
 		expander,
 		counter,
+		store,
 	}
+
 	return &counterExpander
 }
 
@@ -265,35 +313,53 @@ func newPhaseLabel(phase *Phase) *PhaseLabel {
 
 type CounterLabel struct {
 	*gtk.Label
-	phase *Phase
+	counter *Counter
+	phase   *Phase
 }
 
-func newCounterLabel(label *gtk.Label) *CounterLabel {
+func newCounterLabel(label *gtk.Label, counter *Counter, phase *Phase) *CounterLabel {
 	cLabel := CounterLabel{
 		label,
-		nil,
+		counter,
+		phase,
 	}
 	return &cLabel
 }
 
 func (self *CounterLabel) IncreaseBy(add int) {
-	if self.phase == nil {
-		return
+	if self.phase != nil {
+		self.phase.IncreaseBy(add)
 	}
-	self.phase.IncreaseBy(add)
+	if self.counter != nil {
+		self.counter.phaseList[len(self.counter.phaseList)-1].IncreaseBy(1)
+	}
 	self.Label.SetText(self.String())
 }
 
-func (self *CounterLabel) ChangePhase(phase *Phase) {
+func (self *CounterLabel) SetCounter(counter *Counter) {
+	self.phase = nil
+	self.counter = counter
+	self.Label.SetLabel(self.String())
+}
+
+func (self *CounterLabel) SetPhase(phase *Phase) {
+	self.counter = nil
 	self.phase = phase
-	self.SetText(self.String())
+	self.Label.SetLabel(self.String())
 }
 
 func (self *CounterLabel) String() string {
-	if self.phase == nil {
-		return "None Selected"
+	if self.phase != nil {
+		return fmt.Sprintf("%d", self.phase.count)
 	}
-	return fmt.Sprintf("%d", self.phase.count)
+	if self.counter != nil {
+		var sum int
+		for _, phase := range self.counter.phaseList {
+			sum += phase.count
+		}
+		return fmt.Sprintf("%d", sum)
+	}
+	return "None Selected"
 }
 
 type NumericEntry struct {

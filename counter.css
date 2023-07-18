@@ -1,21 +1,22 @@
-window {
-    background: #303030;
-}
-
 .counterTreeView {
     padding: 8px;
 }
 
 .counterTreeView .counterRow {
     margin-top: 4px;
+    border-top: 1px solid #000000;
 }
 
 .counterTreeView expander {
     padding-left: 6px;
 }
 
+.counterTreeView separator:hover {
+    background: transparent;
+}
+
 .counterTreeView row {
-    border-radius: 24px;
+    border-radius: 14px;
 }
 
 .treeViewShim {
@@ -30,4 +31,16 @@ window {
 
 .phaseLabel {
     margin-left: 36px;
+}
+
+#buttonAddPhase {
+    margin: 0px;
+    padding: 0px;
+    padding-left: 6px;
+    padding-right: 6px;
+    border-radius: 12px;
+}
+
+.buttonAddPhase label {
+    font-size: 14px;
 }
