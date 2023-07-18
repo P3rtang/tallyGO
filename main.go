@@ -47,16 +47,13 @@ func newHomeApplicationWindow(app *gtk.Application) (window HomeApplicationWindo
 
 	mainGrid := gtk.NewGrid()
 
-	counterLabel := newCounterLabel(getMainLabel(), nil, nil)
+	counterLabel := newCounterLabel(nil, nil)
 	button := builder.GetObject("buttonAddCounter").Cast().(*gtk.Button)
 	addInput := newNumericEntry(builder.GetObject("entryNumericAddCounter").Cast().(*gtk.Entry))
-	counters := []*Counter{
-		newCounter("test1", 0),
-		newCounter("test2", 0),
-	}
 
-	jsonData, _ := json.Marshal(counters)
-	println(fmt.Sprintf("%q", jsonData))
+	saveDataHandler := NewSaveFileHandler("save.sav")
+	saveDataHandler.Restore()
+	counters := saveDataHandler.CounterData
 
 	counterTV := newCounterTreeView(counters, counterLabel)
 	revealer := gtk.NewRevealer()
@@ -75,7 +72,7 @@ func newHomeApplicationWindow(app *gtk.Application) (window HomeApplicationWindo
 		}
 	})
 	header.PackStart(collapseButton)
-	mainGrid.Attach(header, 0, 0, 3, 1)
+	mainGrid.Attach(header, 0, 0, 2, 1)
 
 	button.ConnectClicked(func() {
 		if num, err := addInput.Int(); err == nil {
@@ -92,9 +89,8 @@ func newHomeApplicationWindow(app *gtk.Application) (window HomeApplicationWindo
 	css.LoadFromPath("counter.css")
 	gtk.StyleContextAddProviderForDisplay(gdk.DisplayGetDefault(), css, gtk.STYLE_PROVIDER_PRIORITY_SETTINGS)
 
-	mainGrid.Attach(counterLabel.Label, 1, 1, 2, 1)
-	mainGrid.Attach(button, 2, 2, 1, 1)
-	mainGrid.Attach(addInput, 1, 2, 1, 1)
+	mainGrid.Attach(counterLabel.labelCount, 1, 1, 1, 1)
+	mainGrid.Attach(counterLabel.labelTime, 1, 2, 1, 1)
 
 	app.AddWindow(window.Window)
 
@@ -113,6 +109,11 @@ func newHomeApplicationWindow(app *gtk.Application) (window HomeApplicationWindo
 		},
 	)
 	return
+}
+
+type Countable interface {
+	IncreaseBy(add int)
+	AddTime(time time.Duration)
 }
 
 type Counter struct {
@@ -139,6 +140,21 @@ func (self *Counter) NewPhase() *Phase {
 	return &newPhase
 }
 
+func (self *Counter) IncreaseBy(add int) {
+	self.Phases[len(self.Phases)-1].Count += add
+}
+
+func (self *Counter) AddTime(time time.Duration) {
+	self.Phases[len(self.Phases)-1].Time += time
+}
+
+func (self *Counter) Time() (time time.Duration) {
+	for _, phase := range self.Phases {
+		time += phase.Time
+	}
+	return
+}
+
 type Phase struct {
 	Name  string
 	Count int
@@ -147,6 +163,10 @@ type Phase struct {
 
 func (self *Phase) IncreaseBy(add int) {
 	self.Count += add
+}
+
+func (self *Phase) AddTime(time time.Duration) {
+	self.Time += time
 }
 
 func createColumn(title string, id int) *gtk.TreeViewColumn {
@@ -219,7 +239,8 @@ func (self *CounterTreeView) newSelection(position uint, nItems uint) {
 		exp := parentRow.Item().Cast().(*gtk.TreeExpander)
 		counter = getCounterFromExpander(exp, self.counters).counter
 		phaseNum = row.Position() - parentRow.Position()
-		self.mainLabel.SetPhase(&counter.Phases[phaseNum-1])
+		phase := &counter.Phases[phaseNum-1]
+		self.mainLabel.SetPhase(phase)
 	}
 }
 
@@ -337,18 +358,38 @@ func newPhaseLabel(phase *Phase) *PhaseLabel {
 }
 
 type LabelMainShowCount struct {
-	*gtk.Label
+	*gtk.Box
+	labelCount *gtk.Label
+	labelTime  *gtk.Label
+	//TODO: add countable interface here
 	counter *Counter
 	phase   *Phase
 }
 
-func newCounterLabel(label *gtk.Label, counter *Counter, phase *Phase) *LabelMainShowCount {
+func newCounterLabel(counter *Counter, phase *Phase) *LabelMainShowCount {
+	labelCount := gtk.NewLabel("None Selected")
+	labelCount.SetHExpand(true)
+	labelCount.SetVExpand(true)
+	labelCount.AddCSSClass("labelMainCount")
+	labelTime := gtk.NewLabel("--:--:--,---")
+	labelCount.AddCSSClass("labelMainTime")
 	cLabel := LabelMainShowCount{
-		label,
+		nil,
+		labelCount,
+		labelTime,
 		counter,
 		phase,
 	}
-	cLabel.AddCSSClass("labelMainShowCount")
+	go func() {
+		for {
+			frameTime := time.Millisecond * 33
+			time.Sleep(frameTime)
+			cLabel.labelCount.SetLabel(cLabel.String())
+			cLabel.labelTime.SetLabel(cLabel.Time())
+			cLabel.UpdateTime(frameTime)
+			fmt.Printf("%v", cLabel.counter)
+		}
+	}()
 	return &cLabel
 }
 
@@ -359,19 +400,46 @@ func (self *LabelMainShowCount) IncreaseBy(add int) {
 	if self.counter != nil {
 		self.counter.Phases[len(self.counter.Phases)-1].IncreaseBy(add)
 	}
-	self.Label.SetText(self.String())
+	self.labelCount.SetText(self.String())
 }
 
 func (self *LabelMainShowCount) SetCounter(counter *Counter) {
 	self.phase = nil
 	self.counter = counter
-	self.Label.SetLabel(self.String())
 }
 
 func (self *LabelMainShowCount) SetPhase(phase *Phase) {
 	self.counter = nil
 	self.phase = phase
-	self.Label.SetLabel(self.String())
+}
+
+func (self *LabelMainShowCount) UpdateTime(time time.Duration) {
+	self.labelTime.SetText(self.Time())
+	if self.phase != nil {
+		self.phase.AddTime(time)
+	}
+	if self.counter != nil {
+		self.counter.AddTime(time)
+	}
+}
+
+func (self *LabelMainShowCount) Time() string {
+	if self.phase != nil {
+		return fmt.Sprint(self.phase.Time)
+	}
+	if self.counter != nil {
+		return fmt.Sprintf("%d", self.counter.Time().Milliseconds())
+	}
+	return "--:--:--,---"
+}
+
+func (self *LabelMainShowCount) AddTime(time time.Duration) {
+	if self.phase != nil {
+		self.phase.AddTime(time)
+	}
+	if self.counter != nil {
+		self.counter.AddTime(time)
+	}
 }
 
 func (self *LabelMainShowCount) String() string {
@@ -408,4 +476,42 @@ func newNumericEntry(entry *gtk.Entry) NumericEntry {
 func (self *NumericEntry) Int() (int, error) {
 	input := self.Entry.Text()
 	return strconv.Atoi(input)
+}
+
+type Settings struct{}
+
+type SaveFileHandler struct {
+	filePath     string
+	CounterData  []*Counter
+	SettingsData *Settings
+}
+
+func NewSaveFileHandler(path string) *SaveFileHandler {
+	return &SaveFileHandler{
+		path,
+		nil,
+		nil,
+	}
+}
+
+func (self *SaveFileHandler) Save() (err error) {
+	var saveData []byte
+	if saveData, err = json.Marshal(self.CounterData); err != nil {
+		return
+	}
+	os.WriteFile(self.filePath, saveData, 0666)
+	return
+}
+
+func (self *SaveFileHandler) Restore() (err error) {
+	var saveData []byte
+	if saveData, err = os.ReadFile(self.filePath); err != nil {
+		return
+	}
+	err = json.Unmarshal(saveData, &self.CounterData)
+	return
+}
+
+type SaveData interface {
+	SaveAsBytes() string
 }

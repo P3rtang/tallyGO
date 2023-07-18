@@ -46,8 +46,12 @@
     font-size: 14px;
 }
 
-.labelMainShowCount {
+.labelMainCount {
     font-size: 56px;
+}
+
+.labelMainCount {
+    font-size: 24px;
 }
 
 grid {
