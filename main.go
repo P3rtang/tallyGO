@@ -45,6 +45,7 @@ func newHomeApplicationWindow(app *gtk.Application) (window HomeApplicationWindo
 	window.SetTitle("Counter")
 
 	mainGrid := gtk.NewGrid()
+
 	counterLabel := newCounterLabel(getMainLabel(), nil, nil)
 	button := builder.GetObject("buttonAddCounter").Cast().(*gtk.Button)
 	addInput := newNumericEntry(builder.GetObject("entryNumericAddCounter").Cast().(*gtk.Entry))
@@ -53,7 +54,23 @@ func newHomeApplicationWindow(app *gtk.Application) (window HomeApplicationWindo
 		newCounter("test2", 0),
 	}
 	counterTV := newCounterTreeView(counters, counterLabel)
-	mainGrid.Attach(counterTV, 0, 0, 1, 2)
+	revealer := gtk.NewRevealer()
+	revealer.SetTransitionType(gtk.RevealerTransitionTypeSlideRight)
+	revealer.SetChild(counterTV)
+	revealer.SetRevealChild(true)
+	mainGrid.Attach(revealer, 0, 1, 1, 2)
+
+	header := gtk.NewActionBar()
+	collapseButton := gtk.NewButtonFromIconName("open-menu-symbolic")
+	collapseButton.ConnectClicked(func() {
+		if revealer.RevealChild() {
+			revealer.SetRevealChild(false)
+		} else {
+			revealer.SetRevealChild(true)
+		}
+	})
+	header.PackStart(collapseButton)
+	mainGrid.Attach(header, 0, 0, 3, 1)
 
 	button.ConnectClicked(func() {
 		if num, err := addInput.Int(); err == nil {
@@ -64,15 +81,15 @@ func newHomeApplicationWindow(app *gtk.Application) (window HomeApplicationWindo
 	})
 
 	window.SetChild(mainGrid)
-	window.SetDefaultSize(400, 300)
+	window.SetDefaultSize(960, 600)
 
 	css := gtk.NewCSSProvider()
 	css.LoadFromPath("counter.css")
 	gtk.StyleContextAddProviderForDisplay(gdk.DisplayGetDefault(), css, gtk.STYLE_PROVIDER_PRIORITY_SETTINGS)
 
-	mainGrid.Attach(counterLabel.Label, 1, 0, 2, 1)
-	mainGrid.Attach(button, 2, 1, 1, 1)
-	mainGrid.Attach(addInput, 1, 1, 1, 1)
+	mainGrid.Attach(counterLabel.Label, 1, 1, 2, 1)
+	mainGrid.Attach(button, 2, 2, 1, 1)
+	mainGrid.Attach(addInput, 1, 2, 1, 1)
 
 	app.AddWindow(window.Window)
 
@@ -124,7 +141,7 @@ type Phase struct {
 }
 
 func (self *Phase) IncreaseBy(add int) {
-	self.count += 1
+	self.count += add
 }
 
 func createColumn(title string, id int) *gtk.TreeViewColumn {
@@ -144,10 +161,10 @@ type CounterTreeView struct {
 	store     *gio.ListStore
 	selection *gtk.SingleSelection
 	counters  []*CounterExpander
-	mainLabel *CounterLabel
+	mainLabel *LabelMainShowCount
 }
 
-func newCounterTreeView(cList []*Counter, mainLabel *CounterLabel) (this CounterTreeView) {
+func newCounterTreeView(cList []*Counter, mainLabel *LabelMainShowCount) (this CounterTreeView) {
 	store := gio.NewListStore(glib.TypeObject)
 	var expanderList []*CounterExpander
 
@@ -183,7 +200,6 @@ func newCounterTreeView(cList []*Counter, mainLabel *CounterLabel) (this Counter
 }
 
 func (self *CounterTreeView) newSelection(position uint, nItems uint) {
-	fmt.Printf("selected %d\n", self.selection.Selected())
 	row := self.selection.Item(self.selection.Selected()).Cast().(*gtk.TreeListRow)
 	var phaseNum uint
 	var counter *Counter
@@ -239,12 +255,16 @@ func bindRow(listItem *gtk.ListItem) {
 
 func getCounterFromExpander(expander *gtk.TreeExpander, counters []*CounterExpander) (counter *CounterExpander) {
 	for _, c := range counters {
-		if c.TreeExpander == expander {
+		if !(c.counter.name == getStringFromExpander(expander)) {
 			continue
 		}
 		counter = c
 	}
 	return
+}
+
+func getStringFromExpander(expander *gtk.TreeExpander) string {
+	return expander.Child().(*gtk.Box).FirstChild().(*gtk.Label).Text()
 }
 
 type CounterExpander struct {
@@ -311,44 +331,45 @@ func newPhaseLabel(phase *Phase) *PhaseLabel {
 	return &phaseLabel
 }
 
-type CounterLabel struct {
+type LabelMainShowCount struct {
 	*gtk.Label
 	counter *Counter
 	phase   *Phase
 }
 
-func newCounterLabel(label *gtk.Label, counter *Counter, phase *Phase) *CounterLabel {
-	cLabel := CounterLabel{
+func newCounterLabel(label *gtk.Label, counter *Counter, phase *Phase) *LabelMainShowCount {
+	cLabel := LabelMainShowCount{
 		label,
 		counter,
 		phase,
 	}
+	cLabel.AddCSSClass("labelMainShowCount")
 	return &cLabel
 }
 
-func (self *CounterLabel) IncreaseBy(add int) {
+func (self *LabelMainShowCount) IncreaseBy(add int) {
 	if self.phase != nil {
 		self.phase.IncreaseBy(add)
 	}
 	if self.counter != nil {
-		self.counter.phaseList[len(self.counter.phaseList)-1].IncreaseBy(1)
+		self.counter.phaseList[len(self.counter.phaseList)-1].IncreaseBy(add)
 	}
 	self.Label.SetText(self.String())
 }
 
-func (self *CounterLabel) SetCounter(counter *Counter) {
+func (self *LabelMainShowCount) SetCounter(counter *Counter) {
 	self.phase = nil
 	self.counter = counter
 	self.Label.SetLabel(self.String())
 }
 
-func (self *CounterLabel) SetPhase(phase *Phase) {
+func (self *LabelMainShowCount) SetPhase(phase *Phase) {
 	self.counter = nil
 	self.phase = phase
 	self.Label.SetLabel(self.String())
 }
 
-func (self *CounterLabel) String() string {
+func (self *LabelMainShowCount) String() string {
 	if self.phase != nil {
 		return fmt.Sprintf("%d", self.phase.count)
 	}

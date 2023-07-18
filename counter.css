@@ -16,6 +16,7 @@
 }
 
 .counterTreeView row {
+    padding: 4px;
     border-radius: 14px;
 }
 
@@ -43,4 +44,33 @@
 
 .buttonAddPhase label {
     font-size: 14px;
+}
+
+.labelMainShowCount {
+    font-size: 56px;
+}
+
+grid {
+    border: 0px;
+}
+
+actionbar {
+    background: #e0e0e0;
+    border: 0px;
+}
+
+actionbar button {
+    background: #ffffff;
+}
+
+button {
+    background: #dddddd;
+}
+
+button:hover {
+    background: #cccccc;
+}
+
+* {
+    border: 0px;
 }
