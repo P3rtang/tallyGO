@@ -211,7 +211,7 @@ func newCounterTreeView(cList []*Counter, mainLabel *LabelMainShowCount) (this C
 	ssel.SetAutoselect(false)
 	ssel.ConnectSelectionChanged(this.newSelection)
 
-	tv.SetSizeRequest(360, 0)
+	tv.SetSizeRequest(300, 0)
 
 	for _, counter := range cList {
 		expander := newCounterExpander(counter)
@@ -367,12 +367,12 @@ type LabelMainShowCount struct {
 }
 
 func newCounterLabel(counter *Counter, phase *Phase) *LabelMainShowCount {
-	labelCount := gtk.NewLabel("None Selected")
+	labelCount := gtk.NewLabel("---")
 	labelCount.SetHExpand(true)
 	labelCount.SetVExpand(true)
 	labelCount.AddCSSClass("labelMainCount")
 	labelTime := gtk.NewLabel("--:--:--,---")
-	labelCount.AddCSSClass("labelMainTime")
+	labelTime.AddCSSClass("labelMainTime")
 	cLabel := LabelMainShowCount{
 		nil,
 		labelCount,
@@ -387,7 +387,6 @@ func newCounterLabel(counter *Counter, phase *Phase) *LabelMainShowCount {
 			cLabel.labelCount.SetLabel(cLabel.String())
 			cLabel.labelTime.SetLabel(cLabel.Time())
 			cLabel.UpdateTime(frameTime)
-			fmt.Printf("%v", cLabel.counter)
 		}
 	}()
 	return &cLabel
@@ -424,13 +423,20 @@ func (self *LabelMainShowCount) UpdateTime(time time.Duration) {
 }
 
 func (self *LabelMainShowCount) Time() string {
+	var time time.Duration
 	if self.phase != nil {
-		return fmt.Sprint(self.phase.Time)
+		time = self.phase.Time
 	}
 	if self.counter != nil {
-		return fmt.Sprintf("%d", self.counter.Time().Milliseconds())
+		time = self.counter.Time()
 	}
-	return "--:--:--,---"
+	return fmt.Sprintf(
+		"%d:%02d:%02d,%03d",
+		int(time.Hours()),
+		int(time.Minutes())%60,
+		int(time.Seconds())%60,
+		time.Milliseconds()%1000,
+	)
 }
 
 func (self *LabelMainShowCount) AddTime(time time.Duration) {
@@ -453,7 +459,7 @@ func (self *LabelMainShowCount) String() string {
 		}
 		return fmt.Sprintf("%d", sum)
 	}
-	return "None Selected"
+	return "---"
 }
 
 type NumericEntry struct {
