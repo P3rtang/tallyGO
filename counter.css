@@ -47,12 +47,29 @@
 }
 
 .labelMainCount {
+    margin-top: 24px;
     font-size: 56px;
 }
 
 .labelMainTime {
+    min-width: 200px;
     font-size: 24px;
-    margin-bottom: 24px;
+    margin-top: 16px;
+    margin-bottom: 8px;
+}
+
+progressbar {
+    margin: 16px;
+    margin-top: 0px;
+}
+
+progressbar * {
+    min-height: 16px;
+}
+
+progress {
+    min-height: 16px;
+    margin: 0px;
 }
 
 grid {
