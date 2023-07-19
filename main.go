@@ -366,14 +366,14 @@ func (self *CounterTreeView) newSelection(position uint, nItems uint) {
 	var counter *Counter
 	switch row.Depth() {
 	case 0:
-		exp := row.Item().Cast().(*gtk.TreeExpander)
-		counter = getCounterExpander(exp, self.counters).counter
+		// exp := row.Item().Cast().(*gtk.TreeExpander)
+		counter = getCounterExpander(row.Item(), self.counters).counter
 		phaseNum = uint(len(counter.Phases))
 		self.mainLabel.SetCounter(counter)
 	case 1:
 		parentRow := row.Parent()
-		exp := parentRow.Item().Cast().(*gtk.TreeExpander)
-		counter = getCounterExpander(exp, self.counters).counter
+		// exp := parentRow.Item().Cast().(*gtk.TreeExpander)
+		counter = getCounterExpander(parentRow.Item(), self.counters).counter
 		phaseNum = row.Position() - parentRow.Position()
 		phase := counter.Phases[phaseNum-1]
 		self.mainLabel.SetCounter(phase)
@@ -385,8 +385,8 @@ func (self *CounterTreeView) createTreeModel(gObj *glib.Object) *gio.ListModel {
 		return nil
 	}
 
-	expander, _ := gObj.Cast().(*gtk.TreeExpander)
-	store := getCounterExpander(expander, self.counters).store
+	// expander, _ := gObj.Cast().(*gtk.TreeExpander)
+	store := getCounterExpander(gObj, self.counters).store
 
 	return &store.ListModel
 }
@@ -420,31 +420,12 @@ func bindRow(listItem *gtk.ListItem) {
 	}
 }
 
-func getCounterExpander(expander *gtk.TreeExpander, counters []*CounterExpander) (counter *CounterExpander) {
+func getCounterExpander(object *glib.Object, counters []*CounterExpander) (counter *CounterExpander) {
 	for _, c := range counters {
-		str, ok := getStringFromExpander(expander)
-		if !ok {
-			continue
-		} else if !(c.counter.Name == str) {
-			continue
+		if c.Object.Eq(object) {
+			return c
 		}
-		counter = c
 	}
-	return
-}
-
-func getStringFromExpander(expander *gtk.TreeExpander) (str string, ok bool) {
-	box, ok := expander.Child().(*gtk.Box)
-	if !ok {
-		return
-	}
-
-	label, ok := box.FirstChild().(*gtk.Label)
-	if !ok {
-		return
-	}
-
-	str = label.Text()
 	return
 }
 
