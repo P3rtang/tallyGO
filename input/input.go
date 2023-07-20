@@ -2,7 +2,9 @@ package input
 
 import (
 	"container/list"
+	"time"
 
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	evdev "github.com/gvalkov/golang-evdev"
 )
 
@@ -10,6 +12,7 @@ type InputHandler interface {
 	Init() error
 	NextEvent() Event
 	HasEvent() bool
+	SimulateKey()
 }
 
 type DevInput struct {
@@ -47,19 +50,32 @@ func (self DevInput) HasEvent() bool {
 func (self DevInput) Init() (err error) {
 	go func() {
 		for self.isRunning {
+			event := self.NextEvent()
+			if event == nil {
+				time.Sleep(time.Millisecond * 5)
+			} else if callback := self.callbackList[callBackKeyType{event.Code, event.Value, event.Level}]; callback != nil {
+				glib.IdleAdd(func() {
+					callback()
+				})
+			}
+		}
+	}()
+
+	go func() {
+		for {
 			dev, err := evdev.Open("/dev/input/by-id/usb-Logitech_G413_Carbon_Mechanical_Gaming_Keyboard_0C6A30553833-event-kbd")
 			events, err := dev.Read()
 			if err != nil || events == nil {
+				time.Sleep(time.Millisecond * 5)
 				continue
 			}
 			for _, event := range events {
-				if ev := fromEvdev(event); ev != nil {
-					if callback := self.callbackList[callBackKeyType{ev.Code, ev.Value}]; callback != nil {
-						callback()
-					} else {
-						self.eventStream.PushBack(ev)
-					}
+				if event.Type != 1 {
+					continue
 				}
+				ev := fromEvdev(event)
+				ev.Level = DevInputEvent
+				self.eventStream.PushBack(ev)
 			}
 		}
 	}()
@@ -67,32 +83,50 @@ func (self DevInput) Init() (err error) {
 	return
 }
 
-func (self DevInput) ConnectKey(key KeyType, evType EventValue, callback func()) {
-	self.callbackList[callBackKeyType{key, evType}] = callback
+func (self DevInput) ConnectKey(key KeyType, evType EventValue, level CallbackLevel, callback func()) {
+	self.callbackList[callBackKeyType{key, evType, level}] = callback
+}
+
+func (self DevInput) SimulateKey(key KeyType, evType EventValue) {
+	self.eventStream.PushBack(
+		Event{
+			time.Now().Unix(),
+			1,
+			key,
+			evType,
+			WindowEvent,
+		},
+	)
 }
 
 type callBackKeyType struct {
 	Code  CodeType
 	Value EventValue
+	Level CallbackLevel
 }
+
+type CallbackLevel int
+
+const (
+	WindowEvent CallbackLevel = iota
+	DevInputEvent
+)
 
 type Event struct {
 	Time  int64
 	Type  EventType
 	Code  CodeType
 	Value EventValue
+	Level CallbackLevel
 }
 
-func fromEvdev(event evdev.InputEvent) *Event {
-	if event.Type != 1 {
-		return nil
-	}
-
-	return &Event{
-		event.Time.Sec,
-		EventType(event.Type),
-		KeyType(event.Code),
-		EventValue(event.Value),
+func fromEvdev(ev evdev.InputEvent) (event Event) {
+	return Event{
+		ev.Time.Sec,
+		EventType(ev.Type),
+		KeyType(ev.Code),
+		EventValue(ev.Value),
+		DevInputEvent,
 	}
 }
 

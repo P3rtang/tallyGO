@@ -30,8 +30,12 @@
     padding: 5px;
 }
 
-.phaseLabel {
+.phaseRow {
     margin-left: 36px;
+}
+
+.phaseRow label {
+    margin-left: 6px;
 }
 
 #buttonAddPhase {
@@ -40,6 +44,10 @@
     padding-left: 6px;
     padding-right: 6px;
     border-radius: 12px;
+}
+
+#treeViewScrollWindow {
+    min-width: 300px;
 }
 
 .buttonAddPhase label {
@@ -65,6 +73,7 @@ progressbar {
 
 progressbar * {
     min-height: 16px;
+    border: 0px;
 }
 
 progress {
@@ -72,27 +81,72 @@ progress {
     margin: 0px;
 }
 
+.progressGreen progress {
+    background: #50FA7B;
+}
+
+.progressYellow progress {
+    background: #F1FA8C;
+}
+
+.progressOrange progress {
+    background: #FFB86C;
+}
+
+.progressRed progress {
+    background: #FF9580;
+}
+
 grid {
     border: 0px;
 }
 
 actionbar {
-    background: #e0e0e0;
+    background: #E0E0E0;
     border: 0px;
 }
 
 actionbar button {
-    background: #ffffff;
+    background: #FFFFFF;
 }
 
 button {
-    background: #dddddd;
+    background: #DDDDDD;
 }
 
 button:hover {
-    background: #cccccc;
+    background: #CCCCCC;
 }
 
-* {
+#treeViewContext {
+    border-radius: 4px;
+}
+
+#treeViewContext list {
+    margin: 2px;
+}
+
+#treeViewContext row {
+    min-width: 160px;
+    border-radius: 8px;
+    padding: 1px;
+    box-shadow: none;
+}
+
+#treeViewContext row:hover {
+    background: #DDDDDD;
+    box-shadow: none;
+}
+
+.activatable {
+    box-shadow: none;
+}
+
+#treeViewContext contents {
+    margin: 4px;
+    padding: 4px;
+}
+
+* button {
     border: 0px;
 }
