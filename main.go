@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"runtime"
 	"strconv"
 	"tallyGo/input"
 	"time"
@@ -55,7 +56,11 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 	counterLabel := newCounterLabel()
 
 	savePath, _ := os.UserHomeDir()
-	savePath += "/.local/share/tallyGo/save.sav"
+	if runtime.GOOS == "windows" {
+		savePath += "/Appdata/local/tallyGo/save.sav"
+	} else {
+		savePath += "/.local/share/tallyGo/save.sav"
+	}
 	saveDataHandler := NewSaveFileHandler(savePath)
 	saveDataHandler.Restore()
 	counters := NewCounterList(saveDataHandler.CounterData)
