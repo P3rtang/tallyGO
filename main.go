@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -18,6 +19,8 @@ import (
 
 const FRAME_TIME = time.Millisecond * 33
 
+//go:embed counter.css
+var CSS_FILE string
 var APP *gtk.Application
 
 func main() {
@@ -33,11 +36,6 @@ func activate(app *gtk.Application) (err error) {
 	window := newHomeApplicationWindow(app)
 	window.Show()
 	return
-}
-
-func getMainLabel() *gtk.Label {
-	builder := gtk.NewBuilderFromFile("counter.ui")
-	return builder.GetObject("labelCounter").Cast().(*gtk.Label)
 }
 
 type HomeApplicationWindow struct {
@@ -56,7 +54,9 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 
 	counterLabel := newCounterLabel()
 
-	saveDataHandler := NewSaveFileHandler("save.sav")
+	savePath, _ := os.UserHomeDir()
+	savePath += "/.local/share/tallyGo/save.sav"
+	saveDataHandler := NewSaveFileHandler(savePath)
 	saveDataHandler.Restore()
 	counters := NewCounterList(saveDataHandler.CounterData)
 	app.ConnectShutdown(func() {
@@ -94,7 +94,7 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 	this.Object.NotifyProperty("default-width", this.HandleNotify)
 
 	css := gtk.NewCSSProvider()
-	css.LoadFromPath("counter.css")
+	css.LoadFromData(CSS_FILE)
 	gtk.StyleContextAddProviderForDisplay(gdk.DisplayGetDefault(), css, gtk.STYLE_PROVIDER_PRIORITY_SETTINGS)
 
 	mainGrid.Attach(counterLabel.labelCount, 1, 1, 1, 1)
@@ -714,6 +714,7 @@ func newPhaseRow(phase *Phase) *PhaseRow {
 	phaseLabel.UpdateLock()
 
 	contextMenu.ConnectRowClick("edit", func() {
+		contextMenu.Unmap()
 		dialog := NewEditDialog(phase)
 		dialog.Present()
 	})
@@ -729,10 +730,9 @@ func newPhaseRow(phase *Phase) *PhaseRow {
 func (self *PhaseRow) UpdateLock() {
 	label := self.contextMenu.rows["lock"]
 
-	if self.phase.IsLocked {
+	if !self.phase.IsLocked {
 		self.lock.SetFromIconName("padlock-unlocked")
 		label.SetText("lock")
-
 	} else {
 		self.lock.SetFromIconName("padlock")
 		label.SetText("unlock")
@@ -864,14 +864,13 @@ func (self *LabelMainShowCount) IncreaseBy(add int) {
 	if self.countable != nil {
 		self.countable.IncreaseBy(add)
 		self.isPaused = false
-		self.UpdateCount()
 	}
 }
 
 func (self *LabelMainShowCount) SetCounter(countable Countable) {
 	self.countable = countable
 	self.countable.ConnectChanged("Count", self.UpdateCount)
-	self.countable.ConnectChanged("Time", self.UpdateCount)
+	self.countable.ConnectChanged("Time", self.UpdateTime)
 	self.UpdateCount()
 	self.UpdateTime()
 }
