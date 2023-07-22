@@ -40,15 +40,15 @@ func activate(app *gtk.Application) (err error) {
 }
 
 type HomeApplicationWindow struct {
-	*gtk.Window
+	*gtk.ApplicationWindow
 	treeViewRevealer     *gtk.Revealer
 	isRevealerAutoHidden bool
 	collapseButton       *gtk.Button
-	headerBar            *gtk.ActionBar
+	headerBar            *gtk.HeaderBar
 }
 
 func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow) {
-	this = HomeApplicationWindow{gtk.NewWindow(), nil, false, nil, nil}
+	this = HomeApplicationWindow{gtk.NewApplicationWindow(app), nil, false, nil, nil}
 	this.SetTitle("Counter")
 
 	mainGrid := gtk.NewGrid()
@@ -57,7 +57,7 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 
 	savePath, _ := os.UserHomeDir()
 	if runtime.GOOS == "windows" {
-		savePath += "/Appdata/local/tallyGo/save.sav"
+		savePath += "/Appdata/Local/tallyGo/save.sav"
 	} else {
 		savePath += "/.local/share/tallyGo/save.sav"
 	}
@@ -80,7 +80,7 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 	mainGrid.Attach(revealer, 0, 1, 1, 3)
 	this.treeViewRevealer = revealer
 
-	header := gtk.NewActionBar()
+	header := gtk.NewHeaderBar()
 	collapseButton := gtk.NewButtonFromIconName("open-menu-symbolic")
 	collapseButton.ConnectClicked(func() {
 		if revealer.RevealChild() {
@@ -89,9 +89,10 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 			revealer.SetRevealChild(true)
 		}
 	})
+	this.Window.SetTitlebar(header)
+
 	this.collapseButton = collapseButton
 	header.PackStart(collapseButton)
-	mainGrid.Attach(header, 0, 0, 2, 1)
 	this.headerBar = header
 
 	this.SetChild(mainGrid)
@@ -105,8 +106,6 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 	mainGrid.Attach(counterLabel.labelCount, 1, 1, 1, 1)
 	mainGrid.Attach(counterLabel.labelTime, 1, 2, 1, 1)
 	mainGrid.Attach(counterLabel.progressBar, 1, 3, 1, 1)
-
-	app.AddWindow(this.Window)
 
 	inputHandler := input.NewDevInput()
 	inputHandler.Init()
@@ -201,6 +200,7 @@ type Countable interface {
 	GetProgressType() ProgressType
 
 	ConnectChanged(field string, f func())
+	callback(field string)
 }
 
 type Counter struct {
@@ -232,6 +232,7 @@ func (self *Counter) ConnectChanged(field string, f func()) {
 
 func (self *Counter) SetName(name string) {
 	self.Name = name
+	self.callback("Name")
 }
 
 func (self *Counter) NewPhase(progressType ProgressType) *Phase {
@@ -296,6 +297,18 @@ func (self *Counter) GetProgressType() ProgressType {
 func (self *Counter) UpdateProgress() {
 	for _, phase := range self.Phases {
 		phase.UpdateProgress()
+	}
+}
+
+func (self *Counter) callback(field string) {
+	if field == "Name" {
+		for _, f := range self.callbackChange[field] {
+			f()
+		}
+	} else {
+		for _, p := range self.Phases {
+			p.callback(field)
+		}
 	}
 }
 
@@ -479,6 +492,10 @@ func (self *CounterTreeView) addCounter(counter *Counter, cList *CounterList) {
 			fmt.Printf("[4040] [WARN] Could not find Counter to delete")
 		}
 	})
+	expander.contextMenu.ConnectRowClick("edit", func() {
+		dialog := NewEditDialog(counter)
+		dialog.Show()
+	})
 	self.expanders = append(self.expanders, expander)
 
 	items := self.store.NItems()
@@ -563,7 +580,8 @@ func getCounterExpander(object *glib.Object, counters []*CounterExpander) (count
 
 type CounterExpander struct {
 	*gtk.TreeExpander
-	counter     *Counter
+	counter *Counter
+
 	store       *gio.ListStore
 	contextMenu *TreeRowContextMenu
 }
@@ -572,11 +590,13 @@ func newCounterExpander(counter *Counter) *CounterExpander {
 	if counter == nil {
 		return nil
 	}
+
 	expander := gtk.NewTreeExpander()
 	shortcutCtrl, ok := expander.ObserveControllers().Item(1).Cast().(*gtk.ShortcutController)
 	if ok {
 		expander.RemoveController(shortcutCtrl)
 	}
+
 	store := gio.NewListStore(glib.TypeObject)
 
 	box := gtk.NewBox(gtk.OrientationHorizontal, 0)
@@ -585,6 +605,7 @@ func newCounterExpander(counter *Counter) *CounterExpander {
 	label := gtk.NewLabel(counter.Name)
 	label.SetHExpand(true)
 	label.SetXAlign(0)
+
 	button := gtk.NewButtonWithLabel("+")
 	button.SetName("buttonAddPhase")
 	button.ConnectClicked(func() {
@@ -594,12 +615,11 @@ func newCounterExpander(counter *Counter) *CounterExpander {
 
 	box.Append(label)
 	box.Append(button)
-
 	expander.SetChild(box)
 
 	contextMenu := newTreeRowContextMenu()
+	contextMenu.NewRow("edit")
 	contextMenu.NewRow("delete")
-
 	contextMenu.SetParent(&box.Widget)
 
 	for _, phase := range counter.Phases {
@@ -607,12 +627,10 @@ func newCounterExpander(counter *Counter) *CounterExpander {
 		store.Append(label.Object)
 	}
 
-	counterExpander := CounterExpander{
-		expander,
-		counter,
-		store,
-		contextMenu,
-	}
+	counterExpander := CounterExpander{expander, counter, store, contextMenu}
+	counter.ConnectChanged("Name", func() {
+		label.SetText(counter.Name)
+	})
 
 	return &counterExpander
 }
@@ -663,6 +681,7 @@ func (self *TreeRowContextMenu) NewRow(text string) {
 func (self *TreeRowContextMenu) ConnectRowClick(rowName string, f func()) {
 	gesture := gtk.NewGestureClick()
 	gesture.ConnectPressed(func(nPress int, x float64, y float64) {
+		self.Unmap()
 		f()
 	})
 	self.rows[rowName].AddController(gesture)
@@ -699,9 +718,9 @@ func newPhaseRow(phase *Phase) *PhaseRow {
 	})
 
 	contextMenu := newTreeRowContextMenu()
-	contextMenu.NewRow("delete")
-	contextMenu.NewRow("edit")
 	contextMenu.NewRow("lock")
+	contextMenu.NewRow("edit")
+	contextMenu.NewRow("delete")
 
 	lock := gtk.NewImageFromIconName("padlock-unlocked")
 	box.Append(lock)
@@ -719,7 +738,6 @@ func newPhaseRow(phase *Phase) *PhaseRow {
 	phaseLabel.UpdateLock()
 
 	contextMenu.ConnectRowClick("edit", func() {
-		contextMenu.Unmap()
 		dialog := NewEditDialog(phase)
 		dialog.Present()
 	})
@@ -758,70 +776,79 @@ func NewEditDialog(countable Countable) *EditDialog {
 	window.SetResizable(false)
 
 	mainWindow := APP.ActiveWindow()
-
-	listBox := gtk.NewBox(gtk.OrientationVertical, 0)
-	window.SetChild(listBox)
 	window.SetTransientFor(mainWindow)
 	window.SetModal(true)
 
+	listBox := gtk.NewBox(gtk.OrientationVertical, 0)
+	listBox.AddCSSClass("editDialogBox")
+	window.SetChild(listBox)
+
 	rows := make(map[string]interface{})
-	dialog := EditDialog{window, listBox, rows, countable}
+	this := EditDialog{window, listBox, rows, countable}
 
-	switch reflect.TypeOf(countable).String() {
-	case "*main.Phase":
-		dialog.NewRowText("Name", countable.(*Phase).Name)
-		dialog.NewRowInt("Count", countable.GetCount())
-	}
-
-	window.ConnectUnrealize(func() {
-		switch reflect.TypeOf(countable).String() {
-		case "*main.Phase":
-			phase := countable.(*Phase)
-			if name, ok := dialog.rows["Name"].(string); ok {
+	switch countable.(type) {
+	case *Phase:
+		phase := countable.(*Phase)
+		this.NewRow("Name", phase.Name)
+		this.NewRow("Count", phase.Count)
+		window.ConnectUnrealize(func() {
+			if name, ok := this.rows["Name"].(string); ok {
 				phase.SetName(name)
 			}
-			if count, ok := dialog.rows["Count"].(int); ok {
-				fmt.Println(dialog.rows)
+			if count, ok := this.rows["Count"].(int); ok {
 				phase.SetCount(count)
 			}
-		}
-		// reset the main window so it can be interacted with again
-		APP.ActiveWindow().SetSensitive(true)
-	})
+		})
+		break
+	case *Counter:
+		this.NewRow("Name", countable.(*Counter).Name)
+		this.NewRow("Count", countable.GetCount())
+		window.ConnectUnrealize(func() {
+			phase := countable.(*Counter)
+			if name, ok := this.rows["Name"].(string); ok {
+				phase.SetName(name)
+			}
+			if count, ok := this.rows["Count"].(int); ok {
+				phase.SetCount(count)
+			}
+		})
+		break
+	}
 
-	return &dialog
+	return &this
 }
 
-func (self *EditDialog) NewRowText(title string, value string) {
+func (self *EditDialog) NewRow(title string, value interface{}) {
 	self.rows[title] = value
 
-	row := gtk.NewBox(gtk.OrientationHorizontal, 0)
-	entry := gtk.NewEntry()
-	entry.SetText(value)
+	switch reflect.TypeOf(value).Kind() {
+	case reflect.Int:
+		row := NewDialogRow(title, value.(int))
+		self.list.Append(row)
+		row.entry.ConnectChanged(func() { self.rows[title] = row.entry.Int() })
+		break
+	case reflect.String:
+		row := NewDialogRow(title, value.(string))
+		self.list.Append(row)
+		row.entry.ConnectChanged(func() { self.rows[title] = row.entry.Text() })
+		break
+	}
+}
 
-	entry.ConnectChanged(func() {
-		self.rows[title] = entry.Text()
-	})
+type DialogRow[T EntryType] struct {
+	*gtk.Box
+	entry *TypedEntry[T]
+}
+
+func NewDialogRow[T EntryType](title string, value T) *DialogRow[T] {
+
+	row := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	entry := NewTypedEntry[T](value)
 
 	row.Append(gtk.NewLabel(title))
 	row.Append(entry)
-	self.list.Append(row)
-}
 
-func (self *EditDialog) NewRowInt(title string, value int) {
-	self.rows[title] = value
-
-	row := gtk.NewBox(gtk.OrientationHorizontal, 0)
-	entry := NewNumericEntry()
-	entry.SetText(fmt.Sprint(value))
-
-	entry.ConnectChanged(func() {
-		self.rows[title], _ = entry.Int()
-	})
-
-	row.Append(gtk.NewLabel(title))
-	row.Append(entry)
-	self.list.Append(row)
+	return &DialogRow[T]{row, entry}
 }
 
 type LabelMainShowCount struct {
@@ -954,25 +981,44 @@ func (self *LabelMainShowCount) String() string {
 	return "---"
 }
 
-type NumericEntry struct {
+type EntryType interface {
+	int | ~string
+}
+
+type TypedEntry[T EntryType] struct {
 	*gtk.Entry
 }
 
-func NewNumericEntry() NumericEntry {
+func NewTypedEntry[T EntryType](value T) *TypedEntry[T] {
 	entry := gtk.NewEntry()
-	entry.ConnectChanged(func() {
-		text := entry.Text()
-		if _, err := strconv.Atoi(text); err != nil && text != "" {
-			entry.DeleteText(len(text)-1, len(text))
-		}
-	})
 
-	return NumericEntry{entry}
+	switch reflect.TypeOf(value).Kind() {
+	case reflect.Int:
+		entry.ConnectChanged(func() {
+			text := entry.Text()
+			if _, err := strconv.Atoi(text); err != nil && text != "" {
+				glib.IdleAdd(func() {
+					entry.DeleteText(len(text)-1, len(text))
+				})
+			}
+		})
+
+	}
+
+	this := &TypedEntry[T]{entry}
+	this.SetValue(value)
+
+	return &TypedEntry[T]{entry}
 }
 
-func (self *NumericEntry) Int() (int, error) {
+func (self *TypedEntry[T]) SetValue(value T) {
+	self.SetText(fmt.Sprint(value))
+}
+
+func (self *TypedEntry[int]) Int() int {
 	input := self.Entry.Text()
-	return strconv.Atoi(input)
+	value, _ := strconv.Atoi(input)
+	return int(value)
 }
 
 type Settings struct{}

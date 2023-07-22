@@ -1,3 +1,7 @@
+github.com/diamondburned/gotk4 v0.0.4 h1:iydA0c/GFShyYG1iJuOHyzbyyIcxsdqjv4yucIi2UXE=
+github.com/diamondburned/gotk4 v0.0.4/go.mod h1:9hxaIotfin2jWlJxPUY1lRdslPPqhZ3OPJWatywKCh4=
+github.com/diamondburned/gotk4/pkg v0.0.4 h1:WEYj7QfGHZvuXAc+cb7EixGpjPYAQSQL5WBRNMfNf1Q=
+github.com/diamondburned/gotk4/pkg v0.0.4/go.mod h1:DdFIIgGetfZf4ZQJkdQTYNcrIBPO8DEvVNIJgzGjWEE=
 github.com/diamondburned/gotk4/pkg v0.0.5 h1:1NOpwNttT63zJdRItwf79ZyX6Bw2bkv8+YjfZCUevcc=
 github.com/diamondburned/gotk4/pkg v0.0.5/go.mod h1:Jr5xzUuGyLsoMtE9LzE/Lay1gD0ONiFWAmQ0+Z6KLeA=
 github.com/gvalkov/golang-evdev v0.0.0-20220815104727-7e27d6ce89b6 h1:K9b8efT9f1NkITNgNAm2A1LuoamhG4pAhXVjz5Sfa5Q=

@@ -1,3 +1,48 @@
+grid {
+    border: 0px;
+}
+
+actionbar {
+    background: #E0E0E0;
+    border: 0px;
+}
+
+actionbar button {
+    background: #FFFFFF;
+}
+
+headerbar button {
+    background: #FFFFFF;
+}
+
+button {
+    border: 0px;
+    background: #DDDDDD;
+}
+
+button:hover {
+    background: #CCCCCC;
+}
+
+progressbar {
+    margin: 16px;
+    margin-top: 0px;
+}
+
+progressbar * {
+    min-height: 16px;
+    border: 0px;
+}
+
+progress {
+    min-height: 16px;
+    margin: 0px;
+}
+
+.activatable {
+    box-shadow: none;
+}
+
 .counterTreeView {
     padding: 8px;
 }
@@ -66,21 +111,6 @@
     margin-bottom: 8px;
 }
 
-progressbar {
-    margin: 16px;
-    margin-top: 0px;
-}
-
-progressbar * {
-    min-height: 16px;
-    border: 0px;
-}
-
-progress {
-    min-height: 16px;
-    margin: 0px;
-}
-
 .progressGreen progress {
     background: #50FA7B;
 }
@@ -95,27 +125,6 @@ progress {
 
 .progressRed progress {
     background: #FF9580;
-}
-
-grid {
-    border: 0px;
-}
-
-actionbar {
-    background: #E0E0E0;
-    border: 0px;
-}
-
-actionbar button {
-    background: #FFFFFF;
-}
-
-button {
-    background: #DDDDDD;
-}
-
-button:hover {
-    background: #CCCCCC;
 }
 
 #treeViewContext {
@@ -138,15 +147,11 @@ button:hover {
     box-shadow: none;
 }
 
-.activatable {
-    box-shadow: none;
-}
-
 #treeViewContext contents {
     margin: 4px;
     padding: 4px;
 }
 
-* button {
-    border: 0px;
+.editDialogBox {
+    padding: 24px;
 }
