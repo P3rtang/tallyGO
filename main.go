@@ -893,9 +893,8 @@ func newCounterLabel() *LabelMainShowCount {
 }
 
 func (self *LabelMainShowCount) IncreaseBy(add int) {
-	if self.countable != nil {
+	if self.countable != nil && self.isPaused != true {
 		self.countable.IncreaseBy(add)
-		self.isPaused = false
 	}
 }
 
