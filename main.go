@@ -112,7 +112,7 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 
 	eventController := gtk.NewEventControllerKey()
 	this.Window.AddController(eventController)
-	eventController.ConnectKeyReleased(func(keyval uint, keycode uint, state gdk.ModifierType) {
+	eventController.ConnectKeyReleased(func(keyval uint, _ uint, _ gdk.ModifierType) {
 		key := input.KeyType(uint16(keyval))
 		inputHandler.SimulateKey(key, 1)
 	})
@@ -211,7 +211,7 @@ type Counter struct {
 	callbackChange map[string][]func()
 }
 
-func newCounter(name string, initValue int, progressType ProgressType) (counter *Counter) {
+func newCounter(name string, _ int, progressType ProgressType) (counter *Counter) {
 	counter = &Counter{name, []*Phase{}, progressType, nil}
 	counter.NewPhase(progressType)
 	return
@@ -665,7 +665,7 @@ func (self *TreeRowContextMenu) SetParent(parent *gtk.Widget) {
 
 	gesture := gtk.NewGestureClick()
 	gesture.SetButton(3)
-	gesture.ConnectPressed(func(nPress int, x float64, y float64) {
+	gesture.ConnectPressed(func(int, float64, float64) {
 		self.Popover.Show()
 	})
 	parent.AddController(gesture)
@@ -680,7 +680,7 @@ func (self *TreeRowContextMenu) NewRow(text string) {
 
 func (self *TreeRowContextMenu) ConnectRowClick(rowName string, f func()) {
 	gesture := gtk.NewGestureClick()
-	gesture.ConnectPressed(func(nPress int, x float64, y float64) {
+	gesture.ConnectPressed(func(int, float64, float64) {
 		self.Unmap()
 		f()
 	})
@@ -791,12 +791,16 @@ func NewEditDialog(countable Countable) *EditDialog {
 		phase := countable.(*Phase)
 		this.NewRow("Name", phase.Name)
 		this.NewRow("Count", phase.Count)
+		this.NewRow("Time", phase.Time)
 		window.ConnectUnrealize(func() {
 			if name, ok := this.rows["Name"].(string); ok {
 				phase.SetName(name)
 			}
 			if count, ok := this.rows["Count"].(int); ok {
 				phase.SetCount(count)
+			}
+			if duration, ok := this.rows["Time"].(time.Duration); ok {
+				phase.SetTime(duration)
 			}
 		})
 		break
@@ -821,18 +825,49 @@ func NewEditDialog(countable Countable) *EditDialog {
 func (self *EditDialog) NewRow(title string, value interface{}) {
 	self.rows[title] = value
 
-	switch reflect.TypeOf(value).Kind() {
-	case reflect.Int:
+	switch value.(type) {
+	case int:
 		row := NewDialogRow(title, value.(int))
 		self.list.Append(row)
 		row.entry.ConnectChanged(func() { self.rows[title] = row.entry.Int() })
 		break
-	case reflect.String:
+	case string:
 		row := NewDialogRow(title, value.(string))
 		self.list.Append(row)
 		row.entry.ConnectChanged(func() { self.rows[title] = row.entry.Text() })
 		break
+	case time.Duration:
+		row := NewDialogTimeRow(title, value.(time.Duration))
+		self.list.Append(row)
+
+		row.ConnectChanged(func() {
+			dur := time.Hour.Nanoseconds()*row.hours.Int() + time.Minute.Nanoseconds()*row.mins.Int()
+			self.rows[title] = time.Duration(dur)
+		})
 	}
+}
+
+type DialogTimeRow struct {
+	*gtk.Box
+	hours *TypedEntry[int]
+	mins  *TypedEntry[int]
+}
+
+func NewDialogTimeRow(title string, value time.Duration) *DialogTimeRow {
+	row := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	entryHour := NewTypedEntry(int(value.Hours()))
+	entryMins := NewTypedEntry(int(value.Minutes()) % 60)
+
+	row.Append(gtk.NewLabel(title))
+	row.Append(entryHour)
+	row.Append(entryMins)
+
+	return &DialogTimeRow{row, entryHour, entryMins}
+}
+
+func (self *DialogTimeRow) ConnectChanged(f func()) {
+	self.hours.ConnectChanged(f)
+	self.mins.ConnectChanged(f)
 }
 
 type DialogRow[T EntryType] struct {
@@ -841,9 +876,8 @@ type DialogRow[T EntryType] struct {
 }
 
 func NewDialogRow[T EntryType](title string, value T) *DialogRow[T] {
-
 	row := gtk.NewBox(gtk.OrientationHorizontal, 0)
-	entry := NewTypedEntry[T](value)
+	entry := NewTypedEntry(value)
 
 	row.Append(gtk.NewLabel(title))
 	row.Append(entry)
@@ -1014,10 +1048,10 @@ func (self *TypedEntry[T]) SetValue(value T) {
 	self.SetText(fmt.Sprint(value))
 }
 
-func (self *TypedEntry[int]) Int() int {
+func (self *TypedEntry[int]) Int() int64 {
 	input := self.Entry.Text()
 	value, _ := strconv.Atoi(input)
-	return int(value)
+	return int64(value)
 }
 
 type Settings struct{}
