@@ -119,18 +119,25 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 
 	inputHandler.ConnectKey(input.KeyEqual, input.KeyReleased, input.DevInputEvent, func() {
 		counterLabel.IncreaseBy(1)
+		saveDataHandler.Save()
 	})
 	inputHandler.ConnectKey(input.KeyKeypadPlus, input.KeyReleased, input.DevInputEvent, func() {
 		counterLabel.IncreaseBy(1)
+		saveDataHandler.Save()
 	})
 	inputHandler.ConnectKey(input.KeyMinus, input.KeyReleased, input.DevInputEvent, func() {
 		counterLabel.IncreaseBy(-1)
+		saveDataHandler.Save()
 	})
 	inputHandler.ConnectKey(input.KeyKeypadMinus, input.KeyReleased, input.DevInputEvent, func() {
 		counterLabel.IncreaseBy(-1)
+		saveDataHandler.Save()
 	})
 	inputHandler.ConnectKey(112, input.KeyReleased, input.WindowEvent, func() {
 		counterLabel.isPaused = !counterLabel.isPaused
+	})
+	inputHandler.ConnectKey(input.KeyQ, input.KeyReleased, input.DevInputEvent, func() {
+		counterLabel.isPaused = true
 	})
 	return
 }
