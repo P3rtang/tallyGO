@@ -2,6 +2,8 @@ package input
 
 import (
 	"container/list"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
@@ -20,6 +22,7 @@ type DevInput struct {
 	callbackList map[callBackKeyType]func()
 
 	isRunning bool
+	file      *evdev.InputDevice
 }
 
 func NewDevInput() DevInput {
@@ -27,10 +30,11 @@ func NewDevInput() DevInput {
 		list.New(),
 		make(map[callBackKeyType]func()),
 		true,
+		nil,
 	}
 }
 
-func (self DevInput) NextEvent() *Event {
+func (self *DevInput) NextEvent() *Event {
 	front := self.eventStream.Front()
 	if front == nil {
 		return nil
@@ -43,11 +47,50 @@ func (self DevInput) NextEvent() *Event {
 	return nil
 }
 
-func (self DevInput) HasEvent() bool {
+func (self *DevInput) HasEvent() bool {
 	return self.eventStream.Len() > 0
 }
 
-func (self DevInput) Init() (err error) {
+func (self *DevInput) ChangeFile(file string) (err error) {
+	self.file, err = evdev.Open("/dev/input/by-id/" + file)
+	return
+}
+
+func (self *DevInput) fileInit() {
+	go func() {
+		for {
+			hasEvent := make(chan bool)
+			timedOut := make(chan bool)
+
+			go self.readEvent(hasEvent)
+			go func() {
+				time.Sleep(time.Millisecond * 200)
+				timedOut <- true
+			}()
+
+			select {
+			case <-hasEvent:
+			case <-timedOut:
+			}
+		}
+	}()
+}
+
+func (self *DevInput) readEvent(hasEvent chan bool) {
+	events, _ := self.file.Read()
+	for _, event := range events {
+		if event.Type != 1 {
+			continue
+		}
+		ev := fromEvdev(event)
+		ev.Level = DevInputEvent
+		self.eventStream.PushBack(ev)
+	}
+	hasEvent <- true
+}
+
+func (self *DevInput) Init(file string) (err error) {
+	self.ChangeFile(file)
 	go func() {
 		for self.isRunning {
 			event := self.NextEvent()
@@ -61,33 +104,16 @@ func (self DevInput) Init() (err error) {
 		}
 	}()
 
-	go func() {
-		for {
-			dev, err := evdev.Open("/dev/input/by-id/usb-Logitech_G413_Carbon_Mechanical_Gaming_Keyboard_0C6A30553833-event-kbd")
-			events, err := dev.Read()
-			if err != nil || events == nil {
-				time.Sleep(time.Millisecond * 5)
-				continue
-			}
-			for _, event := range events {
-				if event.Type != 1 {
-					continue
-				}
-				ev := fromEvdev(event)
-				ev.Level = DevInputEvent
-				self.eventStream.PushBack(ev)
-			}
-		}
-	}()
+	self.fileInit()
 
 	return
 }
 
-func (self DevInput) ConnectKey(key KeyType, evType EventValue, level CallbackLevel, callback func()) {
+func (self *DevInput) ConnectKey(key KeyType, evType EventValue, level CallbackLevel, callback func()) {
 	self.callbackList[callBackKeyType{key, evType, level}] = callback
 }
 
-func (self DevInput) SimulateKey(key KeyType, evType EventValue) {
+func (self *DevInput) SimulateKey(key KeyType, evType EventValue) {
 	self.eventStream.PushBack(
 		Event{
 			time.Now().Unix(),
@@ -97,6 +123,23 @@ func (self DevInput) SimulateKey(key KeyType, evType EventValue) {
 			WindowEvent,
 		},
 	)
+}
+
+func GetKbdList() []string {
+	folder, err := os.ReadDir("/dev/input/by-id/")
+	if err != nil {
+		return []string{}
+	}
+
+	files := []string{}
+	for _, file := range folder {
+		if !strings.Contains(file.Name(), "kbd") {
+			continue
+		}
+		files = append(files, file.Name())
+	}
+
+	return files
 }
 
 type callBackKeyType struct {

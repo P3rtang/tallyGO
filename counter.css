@@ -24,6 +24,16 @@ button:hover {
     background: #CCCCCC;
 }
 
+#settingsButton {
+    padding: 3px;
+    padding-right: 4px;
+}
+
+#settingsButton image {
+    padding: 0px;
+    margin: 2px;
+}
+
 progressbar {
     margin: 16px;
     margin-top: 0px;
@@ -37,6 +47,10 @@ progressbar * {
 progress {
     min-height: 16px;
     margin: 0px;
+}
+
+dialog {
+    background: transparent;
 }
 
 .activatable {
@@ -99,6 +113,20 @@ progress {
     font-size: 14px;
 }
 
+.settingsListView {
+    padding: 8px;
+}
+
+.settingsListView row {
+    padding: 4px;
+    border-radius: 14px;
+}
+
+.settingsListView label {
+    font-size: 16px;
+    padding: 5px;
+}
+
 .labelMainCount {
     margin-top: 24px;
     font-size: 56px;
@@ -153,5 +181,33 @@ progress {
 }
 
 .editDialogBox {
-    padding: 24px;
+    padding: 16px;
+    padding-bottom : 0px;
+}
+
+.editDialogBox button {
+    margin-left: 12px;
+}
+
+.editDialogButtonRow {
+    margin-top: 36px;
+    margin-bottom: 8px;
+}
+
+.editDialogRow {
+    margin: 4px;
+    background: #DDDDDD;
+    border-radius: 8px;
+    padding: 6px;
+    padding-left: 24px;
+    padding-right: 16px;
+    margin-right: 28px;
+}
+
+.editDialogBox entry:nth-child(2) {
+    margin-left: 64px;
+}
+
+.editDialogBox label:first-child {
+    font-size: 18px;
 }

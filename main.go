@@ -2,14 +2,14 @@ package main
 
 import (
 	_ "embed"
-	"encoding/json"
+	"encoding/gob"
 	"fmt"
 	"math"
 	"os"
 	"reflect"
-	"runtime"
 	"strconv"
 	"tallyGo/input"
+	"tallyGo/settings"
 	"time"
 
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
@@ -41,6 +41,10 @@ func activate(app *gtk.Application) (err error) {
 
 type HomeApplicationWindow struct {
 	*gtk.ApplicationWindow
+
+	homeGrid     *gtk.Grid
+	settingsGrid *settings.SettingsMenu
+
 	treeViewRevealer     *gtk.Revealer
 	isRevealerAutoHidden bool
 	collapseButton       *gtk.Button
@@ -48,21 +52,22 @@ type HomeApplicationWindow struct {
 }
 
 func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow) {
-	this = HomeApplicationWindow{gtk.NewApplicationWindow(app), nil, false, nil, nil}
+	this.ApplicationWindow = gtk.NewApplicationWindow(app)
 	this.SetTitle("Counter")
 
-	mainGrid := gtk.NewGrid()
+	savePath, _ := os.UserHomeDir()
+	savePath += "/.local/share/tallyGo/ProgramData"
+	saveDataHandler := NewSaveFileHandler(savePath)
+	saveDataHandler.Restore()
+
+	appSettings := saveDataHandler.SettingsData
+
+	this.homeGrid = gtk.NewGrid()
+	this.settingsGrid = settings.NewSettingsMenu(appSettings)
+	this.settingsGrid.AddItem(settings.Keyboard)
 
 	counterLabel := newCounterLabel()
 
-	savePath, _ := os.UserHomeDir()
-	if runtime.GOOS == "windows" {
-		savePath += "/Appdata/Local/tallyGo/save.sav"
-	} else {
-		savePath += "/.local/share/tallyGo/save.sav"
-	}
-	saveDataHandler := NewSaveFileHandler(savePath)
-	saveDataHandler.Restore()
 	counters := NewCounterList(saveDataHandler.CounterData)
 	app.ConnectShutdown(func() {
 		saveDataHandler.CounterData = counters.list
@@ -77,7 +82,7 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 	revealer.SetTransitionType(gtk.RevealerTransitionTypeSlideRight)
 	revealer.SetChild(scrollView)
 	revealer.SetRevealChild(true)
-	mainGrid.Attach(revealer, 0, 1, 1, 3)
+	this.homeGrid.Attach(revealer, 0, 1, 1, 3)
 	this.treeViewRevealer = revealer
 
 	header := gtk.NewHeaderBar()
@@ -89,13 +94,28 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 			revealer.SetRevealChild(true)
 		}
 	})
-	this.Window.SetTitlebar(header)
 
-	this.collapseButton = collapseButton
+	settingsButton := gtk.NewToggleButton()
+	settingsButton.SetIconName("settings-svgrepo-com")
+	settingsButton.SetName("settingsButton")
+	image := settingsButton.Child().(*gtk.Image)
+	image.SetPixelSize(24)
+	settingsButton.ConnectToggled(func() {
+		if settingsButton.Active() {
+			this.Window.SetChild(this.settingsGrid)
+		} else {
+			this.Window.SetChild(this.homeGrid)
+		}
+	})
+
 	header.PackStart(collapseButton)
+	header.PackEnd(settingsButton)
+
+	this.Window.SetTitlebar(header)
+	this.collapseButton = collapseButton
 	this.headerBar = header
 
-	this.SetChild(mainGrid)
+	this.SetChild(this.homeGrid)
 	this.SetDefaultSize(900, 600)
 	this.Object.NotifyProperty("default-width", this.HandleNotify)
 
@@ -103,12 +123,15 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 	css.LoadFromData(CSS_FILE)
 	gtk.StyleContextAddProviderForDisplay(gdk.DisplayGetDefault(), css, gtk.STYLE_PROVIDER_PRIORITY_SETTINGS)
 
-	mainGrid.Attach(counterLabel.labelCount, 1, 1, 1, 1)
-	mainGrid.Attach(counterLabel.labelTime, 1, 2, 1, 1)
-	mainGrid.Attach(counterLabel.progressBar, 1, 3, 1, 1)
+	this.homeGrid.Attach(counterLabel.labelCount, 1, 1, 1, 1)
+	this.homeGrid.Attach(counterLabel.labelTime, 1, 2, 1, 1)
+	this.homeGrid.Attach(counterLabel.progressBar, 1, 3, 1, 1)
 
 	inputHandler := input.NewDevInput()
-	inputHandler.Init()
+	inputHandler.Init(appSettings.GetValue(settings.ActiveKeyboard).(string))
+	appSettings.ConnectChanged(settings.ActiveKeyboard, func(value interface{}) {
+		inputHandler.ChangeFile(value.(string))
+	})
 
 	eventController := gtk.NewEventControllerKey()
 	this.Window.AddController(eventController)
@@ -118,18 +141,30 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 	})
 
 	inputHandler.ConnectKey(input.KeyEqual, input.KeyReleased, input.DevInputEvent, func() {
+		if counterLabel.isPaused {
+			return
+		}
 		counterLabel.IncreaseBy(1)
 		saveDataHandler.Save()
 	})
 	inputHandler.ConnectKey(input.KeyKeypadPlus, input.KeyReleased, input.DevInputEvent, func() {
+		if counterLabel.isPaused {
+			return
+		}
 		counterLabel.IncreaseBy(1)
 		saveDataHandler.Save()
 	})
 	inputHandler.ConnectKey(input.KeyMinus, input.KeyReleased, input.DevInputEvent, func() {
+		if counterLabel.isPaused {
+			return
+		}
 		counterLabel.IncreaseBy(-1)
 		saveDataHandler.Save()
 	})
 	inputHandler.ConnectKey(input.KeyKeypadMinus, input.KeyReleased, input.DevInputEvent, func() {
+		if counterLabel.isPaused {
+			return
+		}
 		counterLabel.IncreaseBy(-1)
 		saveDataHandler.Save()
 	})
@@ -265,7 +300,7 @@ func (self *Counter) GetCount() (count int) {
 }
 
 func (self *Counter) SetCount(num int) {
-	diff := self.GetCount() - num
+	diff := num - self.GetCount()
 	self.Phases[len(self.Phases)-1].IncreaseBy(diff)
 }
 
@@ -299,6 +334,10 @@ func (self *Counter) GetProgress() (progress float64) {
 
 func (self *Counter) GetProgressType() ProgressType {
 	return self.Phases[0].Progress.Type
+}
+
+func (self *Counter) SetProgressType(type_ ProgressType) {
+	self.ProgressType = type_
 }
 
 func (self *Counter) UpdateProgress() {
@@ -383,6 +422,10 @@ func (self *Phase) GetProgress() float64 {
 
 func (self *Phase) GetProgressType() ProgressType {
 	return self.Progress.Type
+}
+
+func (self *Phase) SetProgressType(type_ ProgressType) {
+	self.Progress.Type = type_
 }
 
 func (self *Phase) UpdateProgress() {
@@ -771,7 +814,8 @@ func (self *PhaseRow) UpdateLock() {
 
 type EditDialog struct {
 	*gtk.Dialog
-	list *gtk.Box
+	list      *gtk.Box
+	buttonRow *gtk.Box
 
 	rows map[string]interface{}
 
@@ -791,7 +835,7 @@ func NewEditDialog(countable Countable) *EditDialog {
 	window.SetChild(listBox)
 
 	rows := make(map[string]interface{})
-	this := EditDialog{window, listBox, rows, countable}
+	this := EditDialog{window, listBox, gtk.NewBox(gtk.OrientationHorizontal, 0), rows, countable}
 
 	switch countable.(type) {
 	case *Phase:
@@ -799,32 +843,55 @@ func NewEditDialog(countable Countable) *EditDialog {
 		this.NewRow("Name", phase.Name)
 		this.NewRow("Count", phase.Count)
 		this.NewRow("Time", phase.Time)
-		window.ConnectUnrealize(func() {
+		this.NewRow("HuntType", fmt.Sprint(phase.Progress.Type))
+		this.AddButton("cancel", func() {
+			this.Close()
+		})
+		this.AddButton("confirm", func() {
 			if name, ok := this.rows["Name"].(string); ok {
 				phase.SetName(name)
 			}
 			if count, ok := this.rows["Count"].(int); ok {
+				println(count)
 				phase.SetCount(count)
 			}
 			if duration, ok := this.rows["Time"].(time.Duration); ok {
 				phase.SetTime(duration)
 			}
+			if type_str, ok := this.rows["HuntType"].(string); ok {
+				type_, _ := strconv.Atoi(type_str)
+				phase.SetProgressType(ProgressType(type_))
+			}
+			this.Close()
 		})
 		break
 	case *Counter:
-		this.NewRow("Name", countable.(*Counter).Name)
-		this.NewRow("Count", countable.GetCount())
-		window.ConnectUnrealize(func() {
-			phase := countable.(*Counter)
+		counter := countable.(*Counter)
+		this.NewRow("Name", counter.Name)
+		this.NewRow("Count", counter.GetCount())
+		this.NewRow("HuntType", fmt.Sprint(counter.ProgressType))
+		this.AddButton("cancel", func() {
+			this.Close()
+		})
+		this.AddButton("confirm", func() {
 			if name, ok := this.rows["Name"].(string); ok {
-				phase.SetName(name)
+				counter.SetName(name)
 			}
 			if count, ok := this.rows["Count"].(int); ok {
-				phase.SetCount(count)
+				counter.SetCount(count)
 			}
+			if type_str, ok := this.rows["HuntType"].(string); ok {
+				type_, _ := strconv.Atoi(type_str)
+				counter.SetProgressType(ProgressType(type_))
+			}
+			this.Close()
 		})
 		break
 	}
+
+	this.list.Append(this.buttonRow)
+	this.buttonRow.AddCSSClass("editDialogButtonRow")
+	this.buttonRow.SetHAlign(gtk.AlignEnd)
 
 	return &this
 }
@@ -836,7 +903,7 @@ func (self *EditDialog) NewRow(title string, value interface{}) {
 	case int:
 		row := NewDialogRow(title, value.(int))
 		self.list.Append(row)
-		row.entry.ConnectChanged(func() { self.rows[title] = row.entry.Int() })
+		row.entry.ConnectChanged(func() { self.rows[title] = int(row.entry.Int()) })
 		break
 	case string:
 		row := NewDialogRow(title, value.(string))
@@ -854,6 +921,12 @@ func (self *EditDialog) NewRow(title string, value interface{}) {
 	}
 }
 
+func (self *EditDialog) AddButton(name string, clickCallback func()) {
+	button := gtk.NewButtonWithLabel(name)
+	button.ConnectClicked(clickCallback)
+	self.buttonRow.Append(button)
+}
+
 type DialogTimeRow struct {
 	*gtk.Box
 	hours *TypedEntry[int]
@@ -862,12 +935,26 @@ type DialogTimeRow struct {
 
 func NewDialogTimeRow(title string, value time.Duration) *DialogTimeRow {
 	row := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	row.AddCSSClass("editDialogRow")
 	entryHour := NewTypedEntry(int(value.Hours()))
 	entryMins := NewTypedEntry(int(value.Minutes()) % 60)
 
-	row.Append(gtk.NewLabel(title))
+	entryHour.AddCSSClass("entryEditDialog")
+	entryMins.AddCSSClass("entryEditDialog")
+	entryHour.SetMaxWidthChars(4)
+	entryMins.SetMaxWidthChars(2)
+	entryHour.SetAlignment(1)
+	entryMins.SetAlignment(1)
+	entryMins.SetMaxLength(2)
+
+	titleLabel := gtk.NewLabel(title)
+	titleLabel.SetHExpand(true)
+	titleLabel.SetHAlign(gtk.AlignStart)
+	row.Append(titleLabel)
 	row.Append(entryHour)
+	row.Append(gtk.NewLabel(" h :   "))
 	row.Append(entryMins)
+	row.Append(gtk.NewLabel(" m "))
 
 	return &DialogTimeRow{row, entryHour, entryMins}
 }
@@ -884,9 +971,16 @@ type DialogRow[T EntryType] struct {
 
 func NewDialogRow[T EntryType](title string, value T) *DialogRow[T] {
 	row := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	row.AddCSSClass("editDialogRow")
 	entry := NewTypedEntry(value)
+	entry.SetAlignment(1)
+	entry.AddCSSClass("entryEditDialog")
+	entry.SetMaxWidthChars(14)
 
-	row.Append(gtk.NewLabel(title))
+	titleLabel := gtk.NewLabel(title)
+	titleLabel.SetHExpand(true)
+	titleLabel.SetHAlign(gtk.AlignStart)
+	row.Append(titleLabel)
 	row.Append(entry)
 
 	return &DialogRow[T]{row, entry}
@@ -1061,12 +1155,10 @@ func (self *TypedEntry[int]) Int() int64 {
 	return int64(value)
 }
 
-type Settings struct{}
-
 type SaveFileHandler struct {
 	filePath     string
 	CounterData  []*Counter
-	SettingsData *Settings
+	SettingsData *settings.Settings
 }
 
 func NewSaveFileHandler(path string) *SaveFileHandler {
@@ -1078,23 +1170,20 @@ func NewSaveFileHandler(path string) *SaveFileHandler {
 }
 
 func (self *SaveFileHandler) Save() (err error) {
-	var saveData []byte
-	if saveData, err = json.Marshal(self.CounterData); err != nil {
-		return
+	file, err := os.OpenFile(self.filePath, os.O_RDWR, 0666)
+	encoder := gob.NewEncoder(file)
+	if err = encoder.Encode(self); err != nil {
+		fmt.Printf("Could not save program got error: %v\n", err)
 	}
-	os.WriteFile(self.filePath, saveData, 0666)
 	return
 }
 
 func (self *SaveFileHandler) Restore() (err error) {
-	var saveData []byte
-	if saveData, err = os.ReadFile(self.filePath); err != nil {
-		return
+	file, err := os.Open(self.filePath)
+	decoder := gob.NewDecoder(file)
+	decoder.Decode(self)
+	if self.SettingsData == nil {
+		self.SettingsData = settings.NewSettings()
 	}
-	err = json.Unmarshal(saveData, &self.CounterData)
 	return
-}
-
-type SaveData interface {
-	SaveAsBytes() string
 }
