@@ -24,6 +24,8 @@ const FRAME_TIME = time.Millisecond * 33
 var CSS_FILE string
 var APP *gtk.Application
 
+// TODO: instead of just storing the date counter should store diffs with a time
+// this will improve the info window
 func main() {
 	APP = gtk.NewApplication("com.github.p3rtang.counter", gio.ApplicationFlagsNone)
 	APP.ConnectActivate(func() { activate(APP) })
@@ -44,16 +46,18 @@ type HomeApplicationWindow struct {
 
 	homeGrid     *gtk.Grid
 	settingsGrid *settings.SettingsMenu
+	infoBox      *infoBox
 
 	treeViewRevealer     *gtk.Revealer
 	isRevealerAutoHidden bool
 	collapseButton       *gtk.Button
 	headerBar            *gtk.HeaderBar
+	isTimingActive       bool
 }
 
 func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow) {
 	this.ApplicationWindow = gtk.NewApplicationWindow(app)
-	this.SetTitle("Counter")
+	this.SetTitle("tallyGo")
 
 	savePath, _ := os.UserHomeDir()
 	savePath += "/.local/share/tallyGo/ProgramData"
@@ -66,15 +70,13 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 	this.settingsGrid = settings.NewSettingsMenu(appSettings)
 	this.settingsGrid.AddItem(settings.Keyboard)
 
-	counterLabel := newCounterLabel()
-
 	counters := NewCounterList(saveDataHandler.CounterData)
 	app.ConnectShutdown(func() {
 		saveDataHandler.CounterData = counters.list
 		saveDataHandler.Save()
 	})
 
-	counterTV := newCounterTreeView(counters, counterLabel)
+	counterTV := newCounterTreeView(counters, &this)
 	scrollView := gtk.NewScrolledWindow()
 	scrollView.SetChild(counterTV)
 	scrollView.SetName("treeViewScrollWindow")
@@ -82,7 +84,6 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 	revealer.SetTransitionType(gtk.RevealerTransitionTypeSlideRight)
 	revealer.SetChild(scrollView)
 	revealer.SetRevealChild(true)
-	this.homeGrid.Attach(revealer, 0, 1, 1, 3)
 	this.treeViewRevealer = revealer
 
 	header := gtk.NewHeaderBar()
@@ -117,15 +118,16 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 
 	this.SetChild(this.homeGrid)
 	this.SetDefaultSize(900, 600)
-	this.Object.NotifyProperty("default-width", this.HandleNotify)
+	this.NotifyProperty("default-width", this.HandleNotify)
 
 	css := gtk.NewCSSProvider()
 	css.LoadFromData(CSS_FILE)
 	gtk.StyleContextAddProviderForDisplay(gdk.DisplayGetDefault(), css, gtk.STYLE_PROVIDER_PRIORITY_SETTINGS)
 
-	this.homeGrid.Attach(counterLabel.labelCount, 1, 1, 1, 1)
-	this.homeGrid.Attach(counterLabel.labelTime, 1, 2, 1, 1)
-	this.homeGrid.Attach(counterLabel.progressBar, 1, 3, 1, 1)
+	this.infoBox = NewInfoBox(nil)
+
+	this.homeGrid.Attach(revealer, 0, 1, 1, 9)
+	this.homeGrid.Attach(this.infoBox, 1, 2, 1, 1)
 
 	inputHandler := input.NewDevInput()
 	inputHandler.Init(appSettings.GetValue(settings.ActiveKeyboard).(string))
@@ -140,39 +142,50 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 		inputHandler.SimulateKey(key, 1)
 	})
 
+	go func() {
+		for {
+			time.Sleep(FRAME_TIME)
+			if this.isTimingActive && !this.infoBox.countable.IsNil() {
+				glib.IdleAdd(func() {
+					this.infoBox.countable.AddTime(FRAME_TIME)
+				})
+			}
+		}
+	}()
+
 	inputHandler.ConnectKey(input.KeyEqual, input.KeyReleased, input.DevInputEvent, func() {
-		if counterLabel.isPaused {
+		if !this.isTimingActive {
 			return
 		}
-		counterLabel.IncreaseBy(1)
+		this.infoBox.countable.IncreaseBy(1)
 		saveDataHandler.Save()
 	})
 	inputHandler.ConnectKey(input.KeyKeypadPlus, input.KeyReleased, input.DevInputEvent, func() {
-		if counterLabel.isPaused {
+		if !this.isTimingActive {
 			return
 		}
-		counterLabel.IncreaseBy(1)
+		this.infoBox.countable.IncreaseBy(1)
 		saveDataHandler.Save()
 	})
 	inputHandler.ConnectKey(input.KeyMinus, input.KeyReleased, input.DevInputEvent, func() {
-		if counterLabel.isPaused {
+		if !this.isTimingActive {
 			return
 		}
-		counterLabel.IncreaseBy(-1)
+		this.infoBox.countable.IncreaseBy(-1)
 		saveDataHandler.Save()
 	})
 	inputHandler.ConnectKey(input.KeyKeypadMinus, input.KeyReleased, input.DevInputEvent, func() {
-		if counterLabel.isPaused {
+		if !this.isTimingActive {
 			return
 		}
-		counterLabel.IncreaseBy(-1)
+		this.infoBox.countable.IncreaseBy(-1)
 		saveDataHandler.Save()
 	})
 	inputHandler.ConnectKey(112, input.KeyReleased, input.WindowEvent, func() {
-		counterLabel.isPaused = !counterLabel.isPaused
+		this.isTimingActive = !this.isTimingActive
 	})
 	inputHandler.ConnectKey(input.KeyQ, input.KeyReleased, input.DevInputEvent, func() {
-		counterLabel.isPaused = true
+		this.isTimingActive = false
 	})
 	return
 }
@@ -243,6 +256,8 @@ type Countable interface {
 
 	ConnectChanged(field string, f func())
 	callback(field string)
+
+	IsNil() bool
 }
 
 type Counter struct {
@@ -358,6 +373,10 @@ func (self *Counter) callback(field string) {
 	}
 }
 
+func (self *Counter) IsNil() bool {
+	return self == nil
+}
+
 type Phase struct {
 	Name     string
 	Count    int
@@ -443,6 +462,10 @@ func (self *Phase) callback(field string) {
 	}
 }
 
+func (self *Phase) IsNil() bool {
+	return self == nil
+}
+
 type callBackType int
 
 const (
@@ -485,22 +508,23 @@ func createColumn(title string, id int) *gtk.TreeViewColumn {
 
 type CounterTreeView struct {
 	*gtk.ListView
-	store     *gio.ListStore
-	selection *gtk.SingleSelection
-	expanders []*CounterExpander
-	mainLabel *LabelMainShowCount
+	store      *gio.ListStore
+	selection  *gtk.SingleSelection
+	expanders  []*CounterExpander
+	homeWindow *HomeApplicationWindow
 }
 
-func newCounterTreeView(cList *CounterList, mainLabel *LabelMainShowCount) (this CounterTreeView) {
+func newCounterTreeView(cList *CounterList, homeWindow *HomeApplicationWindow) (this CounterTreeView) {
 	store := gio.NewListStore(glib.TypeObject)
 	var expanderList []*CounterExpander
 
-	this = CounterTreeView{nil, store, nil, expanderList, mainLabel}
+	this = CounterTreeView{nil, store, nil, expanderList, homeWindow}
 
 	treeStore := gtk.NewTreeListModel(store, false, true, this.createTreeModel)
 	ssel := gtk.NewSingleSelection(treeStore)
 	tv := gtk.NewListView(ssel, nil)
 	tv.AddCSSClass("counterTreeView")
+	tv.SetVExpand(true)
 
 	this.ListView = tv
 	this.selection = ssel
@@ -563,14 +587,14 @@ func (self *CounterTreeView) newSelection(position uint, nItems uint) {
 		// exp := row.Item().Cast().(*gtk.TreeExpander)
 		counter = getCounterExpander(row.Item(), self.expanders).counter
 		phaseNum = uint(len(counter.Phases))
-		self.mainLabel.SetCounter(counter)
+		self.homeWindow.infoBox.SetCounter(counter)
 	case 1:
 		parentRow := row.Parent()
 		// exp := parentRow.Item().Cast().(*gtk.TreeExpander)
 		counter = getCounterExpander(parentRow.Item(), self.expanders).counter
 		phaseNum = row.Position() - parentRow.Position()
 		phase := counter.Phases[phaseNum-1]
-		self.mainLabel.SetCounter(phase)
+		self.homeWindow.infoBox.SetCounter(phase)
 	}
 }
 
@@ -984,135 +1008,6 @@ func NewDialogRow[T EntryType](title string, value T) *DialogRow[T] {
 	row.Append(entry)
 
 	return &DialogRow[T]{row, entry}
-}
-
-type LabelMainShowCount struct {
-	labelCount  *gtk.Label
-	labelTime   *gtk.Label
-	progressBar *gtk.ProgressBar
-	countable   Countable
-	isPaused    bool
-}
-
-func newCounterLabel() *LabelMainShowCount {
-	labelCount := gtk.NewLabel("---")
-	labelCount.SetHExpand(true)
-	labelCount.SetVExpand(true)
-	labelCount.AddCSSClass("labelMainCount")
-
-	labelTime := gtk.NewLabel("--:--:--,---")
-	labelTime.AddCSSClass("labelMainTime")
-
-	progressBar := gtk.NewProgressBar()
-	progressBar.SetShowText(true)
-
-	this := LabelMainShowCount{
-		labelCount,
-		labelTime,
-		progressBar,
-		nil,
-		true,
-	}
-
-	go func() {
-		for {
-			time.Sleep(FRAME_TIME)
-			if !this.isPaused {
-				glib.IdleAdd(func() {
-					this.countable.AddTime(FRAME_TIME)
-				})
-			}
-		}
-	}()
-	return &this
-}
-
-func (self *LabelMainShowCount) IncreaseBy(add int) {
-	if self.countable != nil && self.isPaused != true {
-		self.countable.IncreaseBy(add)
-	}
-}
-
-func (self *LabelMainShowCount) SetCounter(countable Countable) {
-	self.countable = countable
-	self.countable.ConnectChanged("Count", self.UpdateCount)
-	self.countable.ConnectChanged("Time", self.UpdateTime)
-	self.UpdateCount()
-	self.UpdateTime()
-}
-
-func (self *LabelMainShowCount) UpdateCount() {
-	if self.countable == nil {
-		return
-	}
-	self.labelCount.SetText(self.String())
-	fraction := 1.0 - self.countable.GetProgress()
-
-	self.progressBar.SetFraction(fraction)
-	self.progressBar.SetText(fmt.Sprintf("%.03f%%", fraction*100))
-
-	self.progressBar.RemoveCSSClass("progressGreen")
-	self.progressBar.RemoveCSSClass("progressYellow")
-	self.progressBar.RemoveCSSClass("progressOrange")
-	self.progressBar.RemoveCSSClass("progressRed")
-
-	var odds int
-	switch self.countable.GetProgressType() {
-	case OldOdds:
-		odds = 8192
-	case NewOdds:
-		odds = 4096
-	}
-
-	switch {
-	case fraction < .4:
-		self.progressBar.AddCSSClass("progressGreen")
-		break
-	case self.countable.GetCount() < odds && odds != 0:
-		self.progressBar.AddCSSClass("progressYellow")
-		break
-	case fraction < .75:
-		self.progressBar.AddCSSClass("progressOrange")
-		break
-	case fraction < 1.0:
-		self.progressBar.AddCSSClass("progressRed")
-		break
-	}
-}
-
-func (self *LabelMainShowCount) UpdateTime() {
-	if self.countable == nil {
-		return
-	}
-	self.labelTime.SetText(self.Time())
-}
-
-func (self *LabelMainShowCount) Time() string {
-	var time time.Duration
-	if self.countable != nil {
-		time = self.countable.GetTime()
-	}
-	return fmt.Sprintf(
-		"%d:%02d:%02d,%03d",
-		int(time.Hours()),
-		int(time.Minutes())%60,
-		int(time.Seconds())%60,
-		time.Milliseconds()%1000,
-	)
-}
-
-func (self *LabelMainShowCount) AddTime(time time.Duration) {
-	if self.countable != nil {
-		self.countable.AddTime(time)
-		self.UpdateTime()
-	}
-}
-
-func (self *LabelMainShowCount) String() string {
-	if self.countable != nil {
-		return fmt.Sprintf("%d", self.countable.GetCount())
-	}
-	return "---"
 }
 
 type EntryType interface {

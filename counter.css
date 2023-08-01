@@ -34,21 +34,6 @@ button:hover {
     margin: 2px;
 }
 
-progressbar {
-    margin: 16px;
-    margin-top: 0px;
-}
-
-progressbar * {
-    min-height: 16px;
-    border: 0px;
-}
-
-progress {
-    min-height: 16px;
-    margin: 0px;
-}
-
 dialog {
     background: transparent;
 }
@@ -125,11 +110,6 @@ dialog {
 .settingsListView label {
     font-size: 16px;
     padding: 5px;
-}
-
-.labelMainCount {
-    margin-top: 24px;
-    font-size: 56px;
 }
 
 .labelMainTime {
@@ -210,4 +190,76 @@ dialog {
 
 .editDialogBox label:first-child {
     font-size: 18px;
+}
+
+.infoBoxRow label {
+    margin: 8px;
+    margin-right: 16px;
+}
+
+.infoBoxRow label {
+    min-height: 64px;
+    font-size: 24px;
+    margin-left: 16px;
+}
+
+.infoBoxRow #title {
+    font-size: 20px;
+}
+
+#infoToggleButton {
+    background: none;
+    box-shadow: none;
+    margin: 6px;
+    border-radius: 24px;
+}
+
+#infoToggleButton:hover {
+    background: #CCCCCC;
+}
+
+progressbar {
+    padding: 12px;
+    padding-bottom: 0px;
+    margin-bottom: 0px;
+}
+
+progressbar * {
+    min-height: 16px;
+    border: 0px;
+    font-size: 14px;
+}
+
+progress {
+    margin: 0px;
+}
+
+progressbar trough {
+    background: #CCCCCC;
+}
+
+.timeCountCombined {
+    font-size: 24px;
+}
+
+.infoBoxRowProgressBar {
+    min-height: 48px;
+}
+
+#labelMainCount {
+    font-size: 56px;
+}
+
+.infoBoxShowBorder {
+    margin: 4px;
+    background: #DDDDDD;
+    border-radius: 12px;
+}
+
+.longTimeLabel {
+    min-width: 200px;
+}
+
+.shortTimeLabel {
+    min-width: 100px;
 }
