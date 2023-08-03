@@ -3,7 +3,10 @@ module tallyGo
 go 1.20
 
 require github.com/diamondburned/gotk4/pkg v0.0.5
-require github.com/diamondburned/gotk4 v0.0.4 // indirect
+
+require (
+	github.com/montanaflynn/stats v0.7.1
+)
 
 require (
 	github.com/gvalkov/golang-evdev v0.0.0-20220815104727-7e27d6ce89b6

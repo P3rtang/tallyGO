@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"reflect"
 	"time"
 
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
@@ -17,72 +18,88 @@ const (
 	ProgressBar                  = "ProgressBar"
 	StepTime                     = "StepTime"
 	LastStepTime                 = "LastStepTime"
+	OverallLuck                  = "OverallLuck"
 )
 
 type infoBoxWidget interface {
 	setCounter(countable Countable)
 	setBorder(isShown bool)
 	setTitle(set bool)
+	setExpand(set bool)
 }
 
 type infoBox struct {
 	*gtk.Box
 
-	countable  Countable
-	widgets    map[widgetType]infoBoxWidget
-	isExpanded bool
+	countable   Countable
+	counterList *CounterList
+	widgets     map[widgetType]infoBoxWidget
+	isExpanded  bool
 }
 
-func NewInfoBox(counter *Counter) (this *infoBox) {
-	this = &infoBox{nil, counter, map[widgetType]infoBoxWidget{}, false}
+func NewInfoBox(counter *Counter, counterList *CounterList) (self *infoBox) {
+	self = &infoBox{
+		gtk.NewBox(gtk.OrientationVertical, 0),
+		counter,
+		counterList,
+		map[widgetType]infoBoxWidget{},
+		false,
+	}
 
-	box := gtk.NewBox(gtk.OrientationVertical, 0)
-	this.Box = box
-	this.SetVExpand(true)
+	self.AddCSSClass("infoBox")
+	self.SetVExpand(true)
 
 	infoButton := gtk.NewButton()
 
 	infoButton.SetIconName("info-circle-svgrepo-com")
 	infoButton.Child().(*gtk.Image).SetPixelSize(24)
 	infoButton.SetHAlign(gtk.AlignEnd)
+	infoButton.SetVAlign(gtk.AlignStart)
 	infoButton.SetName("infoToggleButton")
 
 	infoButton.ConnectClicked(func() {
-		this.isExpanded = !this.isExpanded
-		if this.isExpanded {
-			this.SetWidgets([]widgetType{
+		self.isExpanded = !self.isExpanded
+		if self.isExpanded {
+			self.SetWidgets([]widgetType{
 				MainCount + MainTime,
 				ProgressBar,
 				StepTime + LastStepTime,
-			}, true, true)
+				OverallLuck,
+			}, "", true, true)
 		} else {
-			this.SetWidgets([]widgetType{
+			self.SetWidgets([]widgetType{
 				MainCount,
 				MainTime,
 				ProgressBar,
-			}, false, false)
+			}, MainCount, false, false)
 		}
 	})
 
-	this.Append(infoButton)
+	HOME.overlay.AddOverlay(infoButton)
 
-	this.AddWidget(MainCount, false)
-	this.AddWidget(MainTime, false)
-	this.AddWidget(ProgressBar, false)
-	// this.AddWidget(StepTime)
+	self.SetWidgets([]widgetType{
+		MainCount,
+		MainTime,
+		ProgressBar,
+	}, MainCount, false, false)
 
 	return
 }
 
-func (self *infoBox) SetWidgets(widgets []widgetType, showBorder bool, showTitle bool) {
-	child := self.LastChild()
-	for self.ObserveChildren().NItems() > 1 {
+func (self *infoBox) SetWidgets(widgets []widgetType, setExpand widgetType, showBorder bool, showTitle bool) {
+	child := self.FirstChild()
+	for self.ObserveChildren().NItems() > 0 {
 		self.Box.Remove(child)
-		child = self.LastChild()
+		child = self.FirstChild()
 	}
+	self.widgets = map[widgetType]infoBoxWidget{}
 
 	for _, widget := range widgets {
 		self.AddWidget(widget, showBorder)
+	}
+
+	if self.widgets[setExpand] != nil {
+		self.widgets[setExpand].setExpand(true)
 	}
 
 	self.SetCounter(self.countable)
@@ -99,7 +116,7 @@ func (self *infoBox) AddWidget(type_ widgetType, showBorder bool) {
 		self.Box.Append(box)
 		self.widgets[MainCount+MainTime] = box
 	case MainCount:
-		mainCountLabel := newMainCountLabel(self.countable, true)
+		mainCountLabel := newMainCountLabel(self.countable)
 		self.Box.Append(mainCountLabel)
 		self.widgets[MainCount] = mainCountLabel
 		break
@@ -125,6 +142,16 @@ func (self *infoBox) AddWidget(type_ widgetType, showBorder bool) {
 		self.Box.Append(stepTimeLabel)
 		self.widgets[StepTime] = stepTimeLabel
 		break
+	case LastStepTime:
+		lastStepTime := newLastStepTime(self.countable)
+		self.Box.Append(lastStepTime)
+		self.widgets[LastStepTime] = lastStepTime
+		break
+	case OverallLuck:
+		overallLuck := newOverallLuck(self.counterList)
+		self.Box.Append(overallLuck)
+		self.widgets[OverallLuck] = overallLuck
+		break
 
 	default:
 		log.Fatal("Unrecognized widget combination")
@@ -135,6 +162,9 @@ func (self *infoBox) AddWidget(type_ widgetType, showBorder bool) {
 
 func (self *infoBox) SetCounter(countable Countable) {
 	self.countable = countable
+	if !self.countable.IsNil() {
+		println(countable.GetName())
+	}
 	for _, widget := range self.widgets {
 		widget.setCounter(countable)
 	}
@@ -170,7 +200,7 @@ func (self *WidgetBox) Append(widget widgetType, countable Countable) {
 	}
 	switch widget {
 	case MainCount:
-		mainCountLabel := newMainCountLabel(countable, false)
+		mainCountLabel := newMainCountLabel(countable)
 		mainCountLabel.SetHExpand(true)
 		self.Box.Append(mainCountLabel)
 		self.widgets = append(self.widgets, mainCountLabel)
@@ -221,6 +251,12 @@ func (self *WidgetBox) setTitle(set bool) {
 	}
 }
 
+func (self *WidgetBox) setExpand(set bool) {
+	for _, widget := range self.widgets {
+		widget.setExpand(set)
+	}
+}
+
 type MainCountLabel struct {
 	*gtk.Box
 	countable  Countable
@@ -228,7 +264,7 @@ type MainCountLabel struct {
 	labelCount *gtk.Label
 }
 
-func newMainCountLabel(countable Countable, doesExpand bool) (self *MainCountLabel) {
+func newMainCountLabel(countable Countable) (self *MainCountLabel) {
 	self = &MainCountLabel{
 		gtk.NewBox(gtk.OrientationHorizontal, 0),
 		countable,
@@ -244,11 +280,6 @@ func newMainCountLabel(countable Countable, doesExpand bool) (self *MainCountLab
 	self.labelTitle.SetName("title")
 	self.labelCount.SetHExpand(true)
 
-	if doesExpand {
-		self.labelCount.SetVExpand(true)
-		self.labelCount.SetName("labelMainCount")
-	}
-
 	return
 }
 
@@ -263,7 +294,7 @@ func (self *MainCountLabel) setCounter(countable Countable) {
 		return
 	}
 	self.countable = countable
-	self.countable.ConnectChanged("Count", self.UpdateCount)
+	self.countable.ConnectChanged("Count", reflect.TypeOf(self).String(), self.UpdateCount)
 	self.UpdateCount()
 }
 
@@ -291,6 +322,15 @@ func (self *MainCountLabel) setBorder(setShown bool) {
 
 func (self *MainCountLabel) setTitle(set bool) {
 	self.labelTitle.SetVisible(set)
+}
+
+func (self *MainCountLabel) setExpand(set bool) {
+	self.labelCount.SetVExpand(set)
+	if set {
+		self.labelCount.AddCSSClass("expandWidget")
+	} else {
+		self.labelCount.RemoveCSSClass("expandWidget")
+	}
 }
 
 type mainTimeLabel struct {
@@ -336,7 +376,7 @@ func (self *mainTimeLabel) setCounter(countable Countable) {
 		return
 	}
 	self.countable = countable
-	self.countable.ConnectChanged("Time", self.UpdateTime)
+	self.countable.ConnectChanged("Time", reflect.TypeOf(self).Name(), self.UpdateTime)
 	self.UpdateTime()
 }
 
@@ -387,6 +427,15 @@ func (self *mainTimeLabel) setTitle(set bool) {
 	self.labelTitle.SetVisible(set)
 }
 
+func (self *mainTimeLabel) setExpand(set bool) {
+	self.labelTime.SetVExpand(set)
+	if set {
+		self.labelTime.AddCSSClass("expandWidget")
+	} else {
+		self.labelTime.RemoveCSSClass("expandWidget")
+	}
+}
+
 type mainProgressBar struct {
 	*gtk.Box
 	countable   Countable
@@ -420,7 +469,7 @@ func (self *mainProgressBar) setCounter(countable Countable) {
 		return
 	}
 	self.countable = countable
-	self.countable.ConnectChanged("Count", self.UpdateCount)
+	self.countable.ConnectChanged("Count", reflect.TypeOf(self).String(), self.UpdateCount)
 	self.UpdateCount()
 }
 
@@ -478,6 +527,15 @@ func (self *mainProgressBar) setTitle(set bool) {
 	}
 }
 
+func (self *mainProgressBar) setExpand(set bool) {
+	self.progressBar.SetVExpand(set)
+	if set {
+		self.progressBar.AddCSSClass("expandWidget")
+	} else {
+		self.progressBar.RemoveCSSClass("expandWidget")
+	}
+}
+
 type labelStepTime struct {
 	*gtk.Box
 	countable Countable
@@ -499,7 +557,13 @@ func newStepTime(countable Countable) (this *labelStepTime) {
 	if countable.IsNil() {
 		return
 	}
-	stepTime := time.Duration(int(countable.GetTime()) / countable.GetCount())
+
+	var stepTime time.Duration
+	if countable.GetCount() != 0 {
+		stepTime = time.Duration(int(countable.GetTime())/countable.GetCount() + 1)
+	} else {
+		stepTime = 0
+	}
 	this.label.SetText(shortFormatTime(stepTime))
 	this.countable = countable
 	return
@@ -510,11 +574,22 @@ func (self *labelStepTime) setCounter(countable Countable) {
 		return
 	}
 	self.countable = countable
-	stepTime := time.Duration(int(countable.GetTime()) / countable.GetCount())
+
+	var stepTime time.Duration
+	if countable.GetCount() != 0 {
+		stepTime = time.Duration(int(countable.GetTime())/countable.GetCount() + 1)
+	} else {
+		stepTime = 0
+	}
 	self.label.SetText(shortFormatTime(stepTime))
 
-	countable.ConnectChanged("Count", func() {
-		stepTime := time.Duration(int(countable.GetTime()) / countable.GetCount())
+	countable.ConnectChanged("Count", reflect.TypeOf(self).String(), func() {
+		var stepTime time.Duration
+		if countable.GetCount() != 0 {
+			stepTime = time.Duration(int(countable.GetTime())/countable.GetCount() + 1)
+		} else {
+			stepTime = 0
+		}
 		self.label.SetText(shortFormatTime(stepTime))
 	})
 }
@@ -532,6 +607,15 @@ func (self *labelStepTime) setTitle(set bool) {
 		self.title.SetVisible(true)
 	} else {
 		self.title.SetVisible(false)
+	}
+}
+
+func (self *labelStepTime) setExpand(set bool) {
+	self.label.SetVExpand(set)
+	if set {
+		self.label.AddCSSClass("expandWidget")
+	} else {
+		self.label.RemoveCSSClass("expandWidget")
 	}
 }
 
@@ -571,7 +655,7 @@ func (self *lastStepTime) setCounter(countable Countable) {
 		return
 	}
 
-	self.countable.ConnectChanged("Count", func() {
+	self.countable.ConnectChanged("Count", reflect.TypeOf(self).String(), func() {
 		if self.lastTime == -1 {
 			self.lastTime = self.countable.GetTime()
 			return
@@ -590,10 +674,96 @@ func (self *lastStepTime) setBorder(setShown bool) {
 }
 
 func (self *lastStepTime) setTitle(set bool) {
+	self.title.SetVisible(set)
+}
+
+func (self *lastStepTime) setExpand(set bool) {
+	self.labelLastStep.SetVExpand(set)
 	if set {
-		self.title.SetVisible(true)
+		self.labelLastStep.AddCSSClass("expandWidget")
 	} else {
-		self.title.SetVisible(false)
+		self.labelLastStep.RemoveCSSClass("expandWidget")
+	}
+}
+
+type overallLuck struct {
+	*gtk.Box
+
+	list *CounterList
+
+	title *gtk.Label
+	luck  *gtk.ProgressBar
+}
+
+func newOverallLuck(list *CounterList) (self *overallLuck) {
+	self = &overallLuck{
+		gtk.NewBox(gtk.OrientationHorizontal, 0),
+		list,
+		gtk.NewLabel("Overall Luck"),
+		gtk.NewProgressBar(),
+	}
+
+	self.Box.Append(self.title)
+	self.Box.Append(self.luck)
+	self.Box.AddCSSClass("infoBoxRow")
+
+	self.title.SetName("title")
+	self.setProgress()
+
+	return
+}
+
+func (self *overallLuck) setProgress() {
+	luck := self.list.Luck()
+
+	self.luck.SetFraction(luck)
+	self.luck.SetText(fmt.Sprintf("%.01f%%", luck*100))
+	self.luck.SetShowText(true)
+	self.luck.SetHExpand(true)
+
+	switch {
+	case luck < 0.3:
+		self.luck.AddCSSClass("progressRed")
+		break
+	case luck < 0.4:
+		self.luck.AddCSSClass("progressOrange")
+		break
+	case luck < 0.5:
+		self.luck.AddCSSClass("progressYellow")
+		break
+	default:
+		self.luck.AddCSSClass("progressGreen")
+	}
+
+}
+
+func (self *overallLuck) setCounter(countable Countable) {
+	if countable.IsNil() {
+		return
+	}
+	countable.ConnectChanged("Count", reflect.TypeOf(self).String(), func() {
+		self.setProgress()
+	})
+}
+
+func (self *overallLuck) setBorder(setShown bool) {
+	if setShown {
+		self.Box.AddCSSClass("infoBoxShowBorder")
+	} else {
+		self.Box.RemoveCSSClass("infoBoxShowBorder")
+	}
+}
+
+func (self *overallLuck) setTitle(set bool) {
+	self.title.SetVisible(set)
+}
+
+func (self *overallLuck) setExpand(set bool) {
+	self.luck.SetVExpand(set)
+	if set {
+		self.luck.AddCSSClass("expandWidget")
+	} else {
+		self.luck.RemoveCSSClass("expandWidget")
 	}
 }
 

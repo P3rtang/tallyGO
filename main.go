@@ -12,6 +12,8 @@ import (
 	"tallyGo/settings"
 	"time"
 
+	"github.com/montanaflynn/stats"
+
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
@@ -23,6 +25,7 @@ const FRAME_TIME = time.Millisecond * 33
 //go:embed counter.css
 var CSS_FILE string
 var APP *gtk.Application
+var HOME *HomeApplicationWindow
 
 // TODO: instead of just storing the date counter should store diffs with a time
 // this will improve the info window
@@ -44,6 +47,7 @@ func activate(app *gtk.Application) (err error) {
 type HomeApplicationWindow struct {
 	*gtk.ApplicationWindow
 
+	overlay      *gtk.Overlay
 	homeGrid     *gtk.Grid
 	settingsGrid *settings.SettingsMenu
 	infoBox      *infoBox
@@ -51,13 +55,28 @@ type HomeApplicationWindow struct {
 	treeViewRevealer     *gtk.Revealer
 	isRevealerAutoHidden bool
 	collapseButton       *gtk.Button
+	settingsButton       *gtk.ToggleButton
 	headerBar            *gtk.HeaderBar
 	isTimingActive       bool
 }
 
-func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow) {
-	this.ApplicationWindow = gtk.NewApplicationWindow(app)
-	this.SetTitle("tallyGo")
+func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow) {
+	self = &HomeApplicationWindow{
+		gtk.NewApplicationWindow(app),
+		gtk.NewOverlay(),
+		gtk.NewGrid(),
+		nil,
+		nil,
+		gtk.NewRevealer(),
+		false,
+		gtk.NewButtonFromIconName("open-menu-symbolic"),
+		gtk.NewToggleButton(),
+		gtk.NewHeaderBar(),
+		false,
+	}
+
+	HOME = self
+	self.SetTitle("tallyGo")
 
 	savePath, _ := os.UserHomeDir()
 	savePath += "/.local/share/tallyGo/ProgramData"
@@ -65,10 +84,8 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 	saveDataHandler.Restore()
 
 	appSettings := saveDataHandler.SettingsData
-
-	this.homeGrid = gtk.NewGrid()
-	this.settingsGrid = settings.NewSettingsMenu(appSettings)
-	this.settingsGrid.AddItem(settings.Keyboard)
+	self.settingsGrid = settings.NewSettingsMenu(appSettings)
+	self.settingsGrid.AddItem(settings.Keyboard)
 
 	counters := NewCounterList(saveDataHandler.CounterData)
 	app.ConnectShutdown(func() {
@@ -76,58 +93,54 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 		saveDataHandler.Save()
 	})
 
-	counterTV := newCounterTreeView(counters, &this)
+	counterTV := newCounterTreeView(counters, self)
 	scrollView := gtk.NewScrolledWindow()
 	scrollView.SetChild(counterTV)
 	scrollView.SetName("treeViewScrollWindow")
-	revealer := gtk.NewRevealer()
-	revealer.SetTransitionType(gtk.RevealerTransitionTypeSlideRight)
-	revealer.SetChild(scrollView)
-	revealer.SetRevealChild(true)
-	this.treeViewRevealer = revealer
 
-	header := gtk.NewHeaderBar()
-	collapseButton := gtk.NewButtonFromIconName("open-menu-symbolic")
-	collapseButton.ConnectClicked(func() {
-		if revealer.RevealChild() {
-			revealer.SetRevealChild(false)
+	self.treeViewRevealer.SetTransitionType(gtk.RevealerTransitionTypeSlideRight)
+	self.treeViewRevealer.SetChild(scrollView)
+	self.treeViewRevealer.SetRevealChild(true)
+
+	self.collapseButton.ConnectClicked(func() {
+		if self.treeViewRevealer.RevealChild() {
+			self.treeViewRevealer.SetRevealChild(false)
 		} else {
-			revealer.SetRevealChild(true)
+			self.treeViewRevealer.SetRevealChild(true)
 		}
 	})
 
-	settingsButton := gtk.NewToggleButton()
-	settingsButton.SetIconName("settings-svgrepo-com")
-	settingsButton.SetName("settingsButton")
-	image := settingsButton.Child().(*gtk.Image)
+	self.settingsButton.SetIconName("settings-svgrepo-com")
+	self.settingsButton.SetName("settingsButton")
+	image := self.settingsButton.Child().(*gtk.Image)
 	image.SetPixelSize(24)
-	settingsButton.ConnectToggled(func() {
-		if settingsButton.Active() {
-			this.Window.SetChild(this.settingsGrid)
+	self.settingsButton.ConnectToggled(func() {
+		if self.settingsButton.Active() {
+			self.overlay.SetChild(self.settingsGrid)
 		} else {
-			this.Window.SetChild(this.homeGrid)
+			self.overlay.SetChild(self.homeGrid)
 		}
 	})
 
-	header.PackStart(collapseButton)
-	header.PackEnd(settingsButton)
+	self.headerBar.PackStart(self.collapseButton)
+	self.headerBar.PackEnd(self.settingsButton)
+	self.Window.SetTitlebar(self.headerBar)
 
-	this.Window.SetTitlebar(header)
-	this.collapseButton = collapseButton
-	this.headerBar = header
-
-	this.SetChild(this.homeGrid)
-	this.SetDefaultSize(900, 600)
-	this.NotifyProperty("default-width", this.HandleNotify)
+	self.SetChild(self.overlay)
+	self.overlay.SetChild(self.homeGrid)
+	self.SetDefaultSize(900, 600)
+	self.NotifyProperty("default-width", self.HandleNotify)
 
 	css := gtk.NewCSSProvider()
 	css.LoadFromData(CSS_FILE)
 	gtk.StyleContextAddProviderForDisplay(gdk.DisplayGetDefault(), css, gtk.STYLE_PROVIDER_PRIORITY_SETTINGS)
 
-	this.infoBox = NewInfoBox(nil)
+	self.infoBox = NewInfoBox(nil, counters)
+	infoBoxScroll := gtk.NewScrolledWindow()
+	infoBoxScroll.SetChild(self.infoBox)
 
-	this.homeGrid.Attach(revealer, 0, 1, 1, 9)
-	this.homeGrid.Attach(this.infoBox, 1, 2, 1, 1)
+	self.homeGrid.Attach(self.treeViewRevealer, 0, 1, 1, 9)
+	self.homeGrid.Attach(infoBoxScroll, 1, 2, 1, 1)
 
 	inputHandler := input.NewDevInput()
 	inputHandler.Init(appSettings.GetValue(settings.ActiveKeyboard).(string))
@@ -136,7 +149,7 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 	})
 
 	eventController := gtk.NewEventControllerKey()
-	this.Window.AddController(eventController)
+	self.Window.AddController(eventController)
 	eventController.ConnectKeyReleased(func(keyval uint, _ uint, _ gdk.ModifierType) {
 		key := input.KeyType(uint16(keyval))
 		inputHandler.SimulateKey(key, 1)
@@ -144,60 +157,84 @@ func newHomeApplicationWindow(app *gtk.Application) (this HomeApplicationWindow)
 
 	go func() {
 		for {
+			startInstant := time.Now()
 			time.Sleep(FRAME_TIME)
-			if this.isTimingActive && !this.infoBox.countable.IsNil() {
+			if self.isTimingActive && !self.infoBox.countable.IsNil() {
 				glib.IdleAdd(func() {
-					this.infoBox.countable.AddTime(FRAME_TIME)
+					self.infoBox.countable.AddTime(time.Now().Sub(startInstant))
 				})
 			}
 		}
 	}()
 
 	inputHandler.ConnectKey(input.KeyEqual, input.KeyReleased, input.DevInputEvent, func() {
-		if !this.isTimingActive {
+		if !self.isTimingActive {
 			return
 		}
-		this.infoBox.countable.IncreaseBy(1)
+		self.infoBox.countable.IncreaseBy(1)
 		saveDataHandler.Save()
 	})
 	inputHandler.ConnectKey(input.KeyKeypadPlus, input.KeyReleased, input.DevInputEvent, func() {
-		if !this.isTimingActive {
+		if !self.isTimingActive {
 			return
 		}
-		this.infoBox.countable.IncreaseBy(1)
+		self.infoBox.countable.IncreaseBy(1)
 		saveDataHandler.Save()
 	})
 	inputHandler.ConnectKey(input.KeyMinus, input.KeyReleased, input.DevInputEvent, func() {
-		if !this.isTimingActive {
+		if !self.isTimingActive {
 			return
 		}
-		this.infoBox.countable.IncreaseBy(-1)
+		self.infoBox.countable.IncreaseBy(-1)
 		saveDataHandler.Save()
 	})
 	inputHandler.ConnectKey(input.KeyKeypadMinus, input.KeyReleased, input.DevInputEvent, func() {
-		if !this.isTimingActive {
+		if !self.isTimingActive {
 			return
 		}
-		this.infoBox.countable.IncreaseBy(-1)
+		self.infoBox.countable.IncreaseBy(-1)
 		saveDataHandler.Save()
 	})
 	inputHandler.ConnectKey(112, input.KeyReleased, input.WindowEvent, func() {
-		this.isTimingActive = !this.isTimingActive
+		self.isTimingActive = !self.isTimingActive
 	})
 	inputHandler.ConnectKey(input.KeyQ, input.KeyReleased, input.DevInputEvent, func() {
-		this.isTimingActive = false
+		self.isTimingActive = false
 	})
 	return
 }
 
 func (self *HomeApplicationWindow) HandleNotify() {
-	if self.Width() < 600 {
+	switch {
+	case self.Width() < 400 && self.infoBox.isExpanded:
+		self.infoBox.SetWidgets([]widgetType{
+			MainCount,
+			MainTime,
+			ProgressBar,
+			StepTime,
+			LastStepTime,
+			OverallLuck,
+		}, "", true, false)
+	case self.Width() < 600:
 		if self.treeViewRevealer.RevealChild() {
 			self.treeViewRevealer.SetRevealChild(false)
 			self.isRevealerAutoHidden = true
 		}
 		self.collapseButton.SetSensitive(false)
-	} else if self.Width() > 600 {
+		self.infoBox.setTitle(false)
+	case self.Width() > 600 && self.infoBox.isExpanded:
+		self.infoBox.SetWidgets([]widgetType{
+			MainCount + MainTime,
+			ProgressBar,
+			StepTime + LastStepTime,
+			OverallLuck,
+		}, "", true, true)
+		if self.isRevealerAutoHidden {
+			self.treeViewRevealer.SetRevealChild(true)
+			self.isRevealerAutoHidden = false
+		}
+		self.collapseButton.SetSensitive(true)
+	case self.Width() > 600:
 		if self.isRevealerAutoHidden {
 			self.treeViewRevealer.SetRevealChild(true)
 			self.isRevealerAutoHidden = false
@@ -240,7 +277,33 @@ func (self *CounterList) GetIdx(counter *Counter) (int, bool) {
 	return 0, false
 }
 
+func (self *CounterList) meanChance() float64 {
+	var sum float64
+	for _, c := range self.list {
+		sum += float64(c.GetChance())
+	}
+	return sum / float64(len(self.list))
+}
+
+func (self *CounterList) stdDev() float64 {
+	if len(self.list) < 2 {
+		return math.Sqrt(math.Pow(float64(self.list[0].GetOdds()), 2)/12) / float64(self.list[0].GetOdds())
+	}
+	mean := self.meanChance()
+	var deviationNumerator float64
+	for _, c := range self.list {
+		deviationNumerator += math.Pow((float64(c.GetChance()) - mean), 2)
+	}
+	return math.Sqrt(deviationNumerator / (float64(len(self.list)) - 1))
+}
+
+func (self *CounterList) Luck() (luck float64) {
+	zScore := (1/math.E - self.meanChance()) / self.stdDev()
+	return 1 - stats.NormCdf(zScore, 0, 1)
+}
+
 type Countable interface {
+	GetName() (name string)
 	SetName(name string)
 
 	GetCount() int
@@ -254,7 +317,7 @@ type Countable interface {
 	GetProgress() float64
 	GetProgressType() ProgressType
 
-	ConnectChanged(field string, f func())
+	ConnectChanged(field string, name string, f func())
 	callback(field string)
 
 	IsNil() bool
@@ -265,7 +328,7 @@ type Counter struct {
 	Phases       []*Phase
 	ProgressType ProgressType
 
-	callbackChange map[string][]func()
+	callbackChange map[string]map[string]func()
 }
 
 func newCounter(name string, _ int, progressType ProgressType) (counter *Counter) {
@@ -274,17 +337,25 @@ func newCounter(name string, _ int, progressType ProgressType) (counter *Counter
 	return
 }
 
-func (self *Counter) ConnectChanged(field string, f func()) {
+func (self *Counter) ConnectChanged(field string, name string, f func()) {
 	if self.callbackChange == nil {
-		self.callbackChange = make(map[string][]func())
+		self.callbackChange = make(map[string]map[string]func())
+	}
+	if self.callbackChange[field] == nil {
+		self.callbackChange[field] = make(map[string]func())
 	}
 	if field == "Name" {
-		self.callbackChange[field] = append(self.callbackChange[field], f)
+		self.callbackChange[field][name] = f
 	} else {
 		for _, phase := range self.Phases {
-			phase.ConnectChanged(field, f)
+			println(field, name)
+			phase.ConnectChanged(field, name, f)
 		}
 	}
+}
+
+func (self *Counter) GetName() (name string) {
+	return self.Name
 }
 
 func (self *Counter) SetName(name string) {
@@ -300,11 +371,27 @@ func (self *Counter) NewPhase(progressType ProgressType) *Phase {
 		time.Duration(0),
 		newProgress(progressType),
 		false,
-		make(map[string][]func()),
+		make(map[string]map[string]func()),
 	}
 	self.Phases = append(self.Phases, newPhase)
 
 	return newPhase
+}
+
+func (self *Counter) GetChance() (chance float64) {
+	chance = math.Pow(1-1/float64(self.GetOdds()), float64(self.GetCount()))
+	return
+}
+
+func (self *Counter) GetOdds() (odds int) {
+	switch self.ProgressType {
+	case OldOdds:
+		odds = 8192
+	case NewOdds:
+		odds = 4096
+	}
+
+	return
 }
 
 func (self *Counter) GetCount() (count int) {
@@ -384,14 +471,21 @@ type Phase struct {
 	Progress *Progress
 	IsLocked bool
 
-	callbackChange map[string][]func()
+	callbackChange map[string]map[string]func()
 }
 
-func (self *Phase) ConnectChanged(field string, f func()) {
+func (self *Phase) ConnectChanged(field string, name string, f func()) {
 	if self.callbackChange == nil {
-		self.callbackChange = make(map[string][]func())
+		self.callbackChange = map[string]map[string]func(){}
 	}
-	self.callbackChange[field] = append(self.callbackChange[field], f)
+	if self.callbackChange[field] == nil {
+		self.callbackChange[field] = map[string]func(){}
+	}
+	self.callbackChange[field][name] = f
+}
+
+func (self *Phase) GetName() (name string) {
+	return self.Name
 }
 
 func (self *Phase) SetName(name string) {
@@ -514,20 +608,20 @@ type CounterTreeView struct {
 	homeWindow *HomeApplicationWindow
 }
 
-func newCounterTreeView(cList *CounterList, homeWindow *HomeApplicationWindow) (this CounterTreeView) {
+func newCounterTreeView(cList *CounterList, homeWindow *HomeApplicationWindow) (self *CounterTreeView) {
 	store := gio.NewListStore(glib.TypeObject)
 	var expanderList []*CounterExpander
 
-	this = CounterTreeView{nil, store, nil, expanderList, homeWindow}
+	self = &CounterTreeView{nil, store, nil, expanderList, homeWindow}
 
-	treeStore := gtk.NewTreeListModel(store, false, true, this.createTreeModel)
+	treeStore := gtk.NewTreeListModel(store, false, true, self.createTreeModel)
 	ssel := gtk.NewSingleSelection(treeStore)
 	tv := gtk.NewListView(ssel, nil)
 	tv.AddCSSClass("counterTreeView")
 	tv.SetVExpand(true)
 
-	this.ListView = tv
-	this.selection = ssel
+	self.ListView = tv
+	self.selection = ssel
 
 	factory := gtk.NewSignalListItemFactory()
 	factory.ConnectSetup(createRow)
@@ -535,12 +629,12 @@ func newCounterTreeView(cList *CounterList, homeWindow *HomeApplicationWindow) (
 	tv.SetFactory(&factory.ListItemFactory)
 
 	ssel.SetAutoselect(false)
-	ssel.ConnectSelectionChanged(this.newSelection)
+	ssel.ConnectSelectionChanged(self.newSelection)
 
 	newCounterButton := gtk.NewButtonWithLabel("New Counter")
 	newCounterButton.ConnectClicked(func() {
 		counter := newCounter("Test", 0, OldOdds)
-		this.addCounter(counter, cList)
+		self.addCounter(counter, cList)
 
 		cList.list = append(cList.list, counter)
 	})
@@ -548,7 +642,7 @@ func newCounterTreeView(cList *CounterList, homeWindow *HomeApplicationWindow) (
 	store.Append(newCounterButton.Object)
 
 	for _, counter := range cList.list {
-		this.addCounter(counter, cList)
+		self.addCounter(counter, cList)
 	}
 
 	return
@@ -660,7 +754,7 @@ type CounterExpander struct {
 	contextMenu *TreeRowContextMenu
 }
 
-func newCounterExpander(counter *Counter) *CounterExpander {
+func newCounterExpander(counter *Counter) (self *CounterExpander) {
 	if counter == nil {
 		return nil
 	}
@@ -701,12 +795,12 @@ func newCounterExpander(counter *Counter) *CounterExpander {
 		store.Append(label.Object)
 	}
 
-	counterExpander := CounterExpander{expander, counter, store, contextMenu}
-	counter.ConnectChanged("Name", func() {
+	self = &CounterExpander{expander, counter, store, contextMenu}
+	counter.ConnectChanged("Name", reflect.TypeOf(self).String(), func() {
 		label.SetText(counter.Name)
 	})
 
-	return &counterExpander
+	return
 }
 
 type TreeRowContextMenu struct {
@@ -776,7 +870,7 @@ type PhaseRow struct {
 	phase *Phase
 }
 
-func newPhaseRow(phase *Phase) *PhaseRow {
+func newPhaseRow(phase *Phase) (self *PhaseRow) {
 	if phase == nil {
 		return nil
 	}
@@ -787,7 +881,7 @@ func newPhaseRow(phase *Phase) *PhaseRow {
 	label := gtk.NewLabel(phase.Name)
 	label.SetHAlign(gtk.AlignStart)
 
-	phase.ConnectChanged("Name", func() {
+	phase.ConnectChanged("Name", reflect.TypeOf(self).String(), func() {
 		label.SetText(phase.Name)
 	})
 
@@ -802,14 +896,14 @@ func newPhaseRow(phase *Phase) *PhaseRow {
 
 	contextMenu.SetParent(&box.Widget)
 
-	phaseLabel := PhaseRow{
+	self = &PhaseRow{
 		box,
 		label,
 		lock,
 		contextMenu,
 		phase,
 	}
-	phaseLabel.UpdateLock()
+	self.UpdateLock()
 
 	contextMenu.ConnectRowClick("edit", func() {
 		dialog := NewEditDialog(phase)
@@ -818,10 +912,10 @@ func newPhaseRow(phase *Phase) *PhaseRow {
 
 	contextMenu.ConnectRowClick("lock", func() {
 		phase.IsLocked = !phase.IsLocked
-		phaseLabel.UpdateLock()
+		self.UpdateLock()
 	})
 
-	return &phaseLabel
+	return
 }
 
 func (self *PhaseRow) UpdateLock() {
