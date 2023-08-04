@@ -2,15 +2,6 @@ grid {
     border: 0px;
 }
 
-actionbar {
-    background: #E0E0E0;
-    border: 0px;
-}
-
-actionbar button {
-    background: #FFFFFF;
-}
-
 headerbar button {
     background: #FFFFFF;
 }
@@ -256,7 +247,19 @@ progressbar trough {
     min-width: 80px;
 }
 
-.expandWidget {
+.WidgetRevealer box {
+    margin: 32px;
+}
+
+.WidgetRevealer label {
     font-size: 56px;
 }
 
+#RevealerTitle {
+    font-size: 28px;
+}
+
+#widget, .selected {
+    background: #3584E4;
+    color: white;
+}

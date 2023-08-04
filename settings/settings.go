@@ -9,34 +9,33 @@ import (
 )
 
 type Settings struct {
-	Items     map[SettingsKey]interface{}
-	callbacks map[SettingsKey][]func(value interface{})
+	Items     map[SettingsKey]any
+	callbacks map[SettingsKey][]func(value any)
 }
 
 func NewSettings() *Settings {
-	items := map[SettingsKey]interface{}{}
+	items := map[SettingsKey]any{}
 	items[ActiveKeyboard] = input.GetKbdList()[0]
 
-	callbacks := map[SettingsKey][]func(value interface{}){}
+	callbacks := map[SettingsKey][]func(value any){}
 
 	this := &Settings{items, callbacks}
 	return this
 }
 
-func (self *Settings) ConnectChanged(key SettingsKey, f func(value interface{})) {
+func (self *Settings) ConnectChanged(key SettingsKey, f func(value any)) {
 	if self.callbacks == nil {
-		self.callbacks = map[SettingsKey][]func(value interface{}){}
+		self.callbacks = map[SettingsKey][]func(value any){}
 	}
 	self.callbacks[key] = append(self.callbacks[key], f)
 }
 
-func (self *Settings) GetValue(key SettingsKey) interface{} {
+func (self *Settings) GetValue(key SettingsKey) any {
 	return self.Items[key]
 }
 
-func (self *Settings) SetValue(key SettingsKey, value interface{}) {
+func (self *Settings) SetValue(key SettingsKey, value any) {
 	self.Items[key] = value
-	println(value)
 	for _, f := range self.callbacks[key] {
 		f(value)
 	}
@@ -45,39 +44,38 @@ func (self *Settings) SetValue(key SettingsKey, value interface{}) {
 type SettingsKey uint
 
 const (
-	ActiveKeyboard SettingsKey = 1
+	None SettingsKey = iota
+	ActiveKeyboard
+	DarkMode
 )
 
 type SettingsMenu struct {
-	*gtk.Grid
+	*gtk.Box
 
 	listView *SettingsItems
 	settings *Settings
 }
 
-func NewSettingsMenu(settings *Settings) *SettingsMenu {
-	this := SettingsMenu{nil, nil, settings}
-
-	grid := gtk.NewGrid()
+func NewSettingsMenu(settings *Settings) (self *SettingsMenu) {
+	self = &SettingsMenu{gtk.NewBox(gtk.OrientationHorizontal, 0), nil, settings}
 
 	listView := NewSettingsItems()
 	listView.SetSizeRequest(300, -1)
 	listView.selectionModel.ConnectSelectionChanged(func(uint, uint) {
-		grid.Attach(listView.selection().menuGrid(settings).grid(), 1, 0, 1, 1)
+		self.Box.Remove(self.Box.LastChild())
+		self.Box.Append(listView.selection().menuGrid(settings).grid())
 	})
 
-	grid.Attach(listView, 0, 0, 1, 1)
-	grid.Attach(Keyboard.menuGrid(settings).grid(), 1, 0, 1, 1)
+	self.Box.Append(listView)
+	self.Box.Append(Keyboard.menuGrid(settings).grid())
 
-	this.Grid = grid
-	this.listView = listView
-	return &this
+	self.listView = listView
+	return
 }
 
 func (self *SettingsMenu) AddItem(key SettingsItemKey) {
-	label := gtk.NewLabel(key.String())
+	label := gtk.NewLabel(string(key))
 	self.listView.store.Append(label.Object)
-	self.listView.items[key] = key.menuGrid(self.settings)
 }
 
 type SettingsItems struct {
@@ -115,31 +113,32 @@ func (self *SettingsItems) bindRow(listItem *gtk.ListItem) {
 	listItem.SetChild(row.Cast().(*gtk.Label))
 }
 
-func (self *SettingsItems) selection() SettingsItemKey {
-	return SettingsItemKey(self.selectionModel.Selected())
-}
-
-type SettingsItemKey int
-
-func (self SettingsItemKey) String() string {
-	switch self {
+func (self *SettingsItems) selection() (key SettingsItemKey) {
+	switch self.selectionModel.Selected() {
 	case 0:
-		return "Keyboard"
+		key = Keyboard
+	case 1:
+		key = Theme
 	}
-	return "Item Not Found"
+	return
 }
+
+type SettingsItemKey string
 
 func (self SettingsItemKey) menuGrid(settings *Settings) SettingsItemGrid {
 	switch self {
 	case Keyboard:
 		return NewKeyboardSettingsGrid(settings)
+	case Theme:
+		return NewThemeSettingsGrid(settings)
 	}
 
 	return nil
 }
 
 const (
-	Keyboard SettingsItemKey = iota
+	Keyboard SettingsItemKey = "Keyboard"
+	Theme                    = "Theme"
 )
 
 type SettingsItemGrid interface {
@@ -217,4 +216,47 @@ func bindKbd(listItem *gtk.ListItem) {
 
 func (self *KeyboardChooser) ActiveKeyboard() string {
 	return self.keybds[self.Selected()]
+}
+
+type ThemeSettingsGrid struct {
+	*gtk.Grid
+
+	darkModeToggle *gtk.ToggleButton
+	settings       *Settings
+}
+
+func NewThemeSettingsGrid(settings *Settings) (self *ThemeSettingsGrid) {
+	self = &ThemeSettingsGrid{
+		gtk.NewGrid(),
+		gtk.NewToggleButton(),
+		settings,
+	}
+
+	self.Grid.Attach(self.darkModeToggle, 0, 0, 1, 1)
+
+	if self.settings.GetValue(DarkMode) == nil {
+		self.settings.SetValue(DarkMode, false)
+	}
+
+	self.darkModeToggle.ConnectClicked(func() {
+		self.settings.SetValue(DarkMode, !self.settings.GetValue(DarkMode).(bool))
+		self.setIcon()
+	})
+
+	self.setIcon()
+
+	return
+}
+
+func (self *ThemeSettingsGrid) grid() *gtk.Grid {
+	return self.Grid
+}
+
+func (self *ThemeSettingsGrid) setIcon() {
+	if self.settings.GetValue(DarkMode) == true {
+		self.darkModeToggle.SetIconName("dark-mode-night-moon-svgrepo-com")
+	} else {
+		self.darkModeToggle.SetIconName("sun-svgrepo-com")
+	}
+
 }

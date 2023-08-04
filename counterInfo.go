@@ -3,16 +3,18 @@ package main
 import (
 	"fmt"
 	"log"
-	"reflect"
 	"time"
 
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
+	"golang.org/x/exp/slices"
 )
 
 type widgetType string
 
 const (
-	MainCount         widgetType = "MainCount"
+	None              widgetType = ""
+	WidgetRevealer               = "WidgetRevealer"
+	MainCount                    = "MainCount"
 	MainTime                     = "MainTime"
 	TimeCountCombined            = "TimeCountCombined"
 	ProgressBar                  = "ProgressBar"
@@ -26,6 +28,9 @@ type infoBoxWidget interface {
 	setBorder(isShown bool)
 	setTitle(set bool)
 	setExpand(set bool)
+	connectRevealer(revealer *widgetRevealer)
+	addCSSClass(name string)
+	removeCSSClass(name string)
 }
 
 type infoBox struct {
@@ -33,8 +38,10 @@ type infoBox struct {
 
 	countable   Countable
 	counterList *CounterList
-	widgets     map[widgetType]infoBoxWidget
-	isExpanded  bool
+
+	widgets        map[widgetType]infoBoxWidget
+	widgetRevealer *widgetRevealer
+	isExpanded     bool
 }
 
 func NewInfoBox(counter *Counter, counterList *CounterList) (self *infoBox) {
@@ -43,56 +50,67 @@ func NewInfoBox(counter *Counter, counterList *CounterList) (self *infoBox) {
 		counter,
 		counterList,
 		map[widgetType]infoBoxWidget{},
-		false,
+		nil,
+		true,
 	}
 
+	self.widgetRevealer = newRevealWidget(self.getWidgetSlice())
 	self.AddCSSClass("infoBox")
 	self.SetVExpand(true)
 
-	infoButton := gtk.NewButton()
+	APP.ActiveWindow().NotifyProperty("default-height", self.handleResize)
 
-	infoButton.SetIconName("info-circle-svgrepo-com")
-	infoButton.Child().(*gtk.Image).SetPixelSize(24)
-	infoButton.SetHAlign(gtk.AlignEnd)
-	infoButton.SetVAlign(gtk.AlignStart)
-	infoButton.SetName("infoToggleButton")
-
-	infoButton.ConnectClicked(func() {
-		self.isExpanded = !self.isExpanded
-		if self.isExpanded {
-			self.SetWidgets([]widgetType{
-				MainCount + MainTime,
-				ProgressBar,
-				StepTime + LastStepTime,
-				OverallLuck,
-			}, "", true, true)
-		} else {
-			self.SetWidgets([]widgetType{
-				MainCount,
-				MainTime,
-				ProgressBar,
-			}, MainCount, false, false)
-		}
-	})
-
-	HOME.overlay.AddOverlay(infoButton)
-
+	self.isExpanded = true
+	self.Append(self.widgetRevealer)
 	self.SetWidgets([]widgetType{
-		MainCount,
-		MainTime,
+		MainCount + MainTime,
 		ProgressBar,
-	}, MainCount, false, false)
+		StepTime + LastStepTime,
+		OverallLuck,
+	}, None, true, true)
 
 	return
 }
 
+func (self *infoBox) getWidgetSlice() (list []infoBoxWidget) {
+	for _, widget := range self.widgets {
+		list = append(list, widget)
+	}
+	return
+}
+
+func (self *infoBox) handleResize() {
+	switch {
+	case self.Width() < 500 && self.isExpanded:
+		self.isExpanded = false
+		self.SetWidgets([]widgetType{
+			MainCount,
+			MainTime,
+			ProgressBar,
+			StepTime,
+			LastStepTime,
+			OverallLuck,
+		}, None, true, false)
+	case self.Width() > 500 && !self.isExpanded:
+		self.isExpanded = true
+		self.SetWidgets([]widgetType{
+			MainCount + MainTime,
+			ProgressBar,
+			StepTime + LastStepTime,
+			OverallLuck,
+		}, None, true, true)
+	}
+}
+
 func (self *infoBox) SetWidgets(widgets []widgetType, setExpand widgetType, showBorder bool, showTitle bool) {
-	child := self.FirstChild()
+	child := self.LastChild()
 	for self.ObserveChildren().NItems() > 0 {
 		self.Box.Remove(child)
-		child = self.FirstChild()
+		child = self.LastChild()
 	}
+
 	self.widgets = map[widgetType]infoBoxWidget{}
+	self.Append(self.widgetRevealer)
 
 	for _, widget := range widgets {
 		self.AddWidget(widget, showBorder)
@@ -105,6 +123,13 @@ func (self *infoBox) SetWidgets(widgets []widgetType, setExpand widgetType, show
 	self.SetCounter(self.countable)
 	self.setBorder(showBorder)
 	self.setTitle(showTitle)
+	self.setRevealer()
+}
+
+func (self *infoBox) setRevealer() {
+	for _, widget := range self.widgets {
+		widget.connectRevealer(self.widgetRevealer)
+	}
 }
 
 func (self *infoBox) AddWidget(type_ widgetType, showBorder bool) {
@@ -116,42 +141,35 @@ func (self *infoBox) AddWidget(type_ widgetType, showBorder bool) {
 		self.Box.Append(box)
 		self.widgets[MainCount+MainTime] = box
 	case MainCount:
-		mainCountLabel := newMainCountLabel(self.countable)
+		mainCountLabel := newMainCountLabel()
 		self.Box.Append(mainCountLabel)
 		self.widgets[MainCount] = mainCountLabel
-		break
 	case MainTime:
-		mainTimeLabel := newMainTimeLabel(self.countable)
+		mainTimeLabel := newMainTimeLabel()
 		self.Box.Append(mainTimeLabel)
 		self.widgets[MainTime] = mainTimeLabel
-		break
 	case ProgressBar:
-		mainProgressBar := newMainProgressBar(self.countable)
+		mainProgressBar := newMainProgressBar()
 		self.Box.Append(mainProgressBar)
 		self.widgets[ProgressBar] = mainProgressBar
-		break
 	case StepTime + LastStepTime:
 		box := newWidgetBox(false)
 		box.Append(StepTime, self.countable)
 		box.Append(LastStepTime, self.countable)
 		self.Box.Append(box)
 		self.widgets[StepTime+LastStepTime] = box
-		break
 	case StepTime:
-		stepTimeLabel := newStepTime(self.countable)
+		stepTimeLabel := newStepTime()
 		self.Box.Append(stepTimeLabel)
 		self.widgets[StepTime] = stepTimeLabel
-		break
 	case LastStepTime:
-		lastStepTime := newLastStepTime(self.countable)
+		lastStepTime := newLastStepTime()
 		self.Box.Append(lastStepTime)
 		self.widgets[LastStepTime] = lastStepTime
-		break
 	case OverallLuck:
 		overallLuck := newOverallLuck(self.counterList)
 		self.Box.Append(overallLuck)
 		self.widgets[OverallLuck] = overallLuck
-		break
 
 	default:
 		log.Fatal("Unrecognized widget combination")
@@ -168,6 +186,8 @@ func (self *infoBox) SetCounter(countable Countable) {
 	for _, widget := range self.widgets {
 		widget.setCounter(countable)
 	}
+
+	self.widgetRevealer.setCounter(countable)
 }
 
 func (self *infoBox) setBorder(isShown bool) {
@@ -179,6 +199,117 @@ func (self *infoBox) setBorder(isShown bool) {
 func (self *infoBox) setTitle(showTitle bool) {
 	for _, widget := range self.widgets {
 		widget.setTitle(showTitle)
+	}
+}
+
+func (self *infoBox) toggleCSSClass(name string) {
+	if slices.Contains(self.CSSClasses(), name) {
+		self.RemoveCSSClass(name)
+	} else {
+		self.AddCSSClass(name)
+	}
+}
+
+type widgetRevealer struct {
+	*gtk.Revealer
+
+	widgetList     []infoBoxWidget
+	selectedWidget infoBoxWidget
+	widgetType     widgetType
+	countable      Countable
+
+	callbacks map[string][]func()
+}
+
+func newRevealWidget(widgetList []infoBoxWidget) (self *widgetRevealer) {
+	self = &widgetRevealer{
+		gtk.NewRevealer(),
+		widgetList,
+		infoBoxWidget(nil),
+		None,
+		nil,
+		map[string][]func(){},
+	}
+	self.SetRevealChild(false)
+	self.SetTransitionType(gtk.RevealerTransitionTypeSlideUp)
+	self.AddCSSClass("WidgetRevealer")
+	self.SetHExpand(true)
+	return
+}
+
+func (self *widgetRevealer) setCounter(countable Countable) {
+	self.countable = countable
+	if self.selectedWidget != infoBoxWidget(nil) {
+		self.selectedWidget.setCounter(self.countable)
+	}
+}
+
+func (self *widgetRevealer) setWidget(widget widgetType) {
+	for _, f := range self.callbacks["ChangeWidget"] {
+		f()
+	}
+
+	self.widgetType = widget
+
+	box := gtk.NewBox(gtk.OrientationVertical, 0)
+	self.SetChild(box)
+	label := gtk.NewLabel("")
+	label.SetName("RevealerTitle")
+	box.Append(label)
+
+	switch widget {
+	case None:
+		self.SetRevealChild(false)
+		self.SetVExpand(false)
+		self.selectedWidget = infoBoxWidget(nil)
+		return
+	case MainCount:
+		mainCountLabel := newMainCountLabel()
+		mainCountLabel.setCounter(self.countable)
+		self.selectedWidget = mainCountLabel
+		label.SetText("Count")
+		box.Append(mainCountLabel)
+	case MainTime:
+		mainTimeLabel := newMainTimeLabel()
+		mainTimeLabel.setCounter(self.countable)
+		self.selectedWidget = mainTimeLabel
+		label.SetText("Time")
+		box.Append(mainTimeLabel)
+	case ProgressBar:
+		mainProgressBar := newMainProgressBar()
+		mainProgressBar.setCounter(self.countable)
+		self.selectedWidget = mainProgressBar
+		label.SetText("Progress")
+		box.Append(mainProgressBar)
+	case StepTime:
+		stepTimeLabel := newStepTime()
+		stepTimeLabel.setCounter(self.countable)
+		self.selectedWidget = stepTimeLabel
+		label.SetText("Time per Step")
+		box.Append(stepTimeLabel)
+	case LastStepTime:
+		lastStep := newLastStepTime()
+		lastStep.setCounter(self.countable)
+		self.selectedWidget = lastStep
+		label.SetText("Last Step")
+		box.Append(lastStep)
+	}
+	self.SetRevealChild(true)
+}
+
+func (self *widgetRevealer) ConnectChanged(name string, f func()) {
+	callbackNames := []string{"ChangeWidget"}
+	if !slices.Contains(callbackNames, name) {
+		log.Printf("Unrecognized callback Name %s\n", name)
+		log.Printf("Name should be one of the following %v", callbackNames)
+		return
+	}
+	self.callbacks[name] = append(self.callbacks[name], f)
+}
+
+func (self *widgetRevealer) callback(name string) {
+	for _, f := range self.callbacks[name] {
+		f()
 	}
 }
 
@@ -200,31 +331,31 @@ func (self *WidgetBox) Append(widget widgetType, countable Countable) {
 	}
 	switch widget {
 	case MainCount:
-		mainCountLabel := newMainCountLabel(countable)
+		mainCountLabel := newMainCountLabel()
 		mainCountLabel.SetHExpand(true)
 		self.Box.Append(mainCountLabel)
 		self.widgets = append(self.widgets, mainCountLabel)
 		break
 	case MainTime:
-		mainTimeLabel := newMainTimeLabel(countable)
+		mainTimeLabel := newMainTimeLabel()
 		mainTimeLabel.SetHExpand(true)
 		self.Box.Append(mainTimeLabel)
 		self.widgets = append(self.widgets, mainTimeLabel)
 		break
 	case ProgressBar:
-		mainProgressBar := newMainProgressBar(countable)
+		mainProgressBar := newMainProgressBar()
 		mainProgressBar.SetHExpand(true)
 		self.Box.Append(mainProgressBar)
 		self.widgets = append(self.widgets, mainProgressBar)
 		break
 	case StepTime:
-		stepTimeLabel := newStepTime(countable)
+		stepTimeLabel := newStepTime()
 		stepTimeLabel.SetHExpand(true)
 		self.Box.Append(stepTimeLabel)
 		self.widgets = append(self.widgets, stepTimeLabel)
 		break
 	case LastStepTime:
-		lastStep := newLastStepTime(countable)
+		lastStep := newLastStepTime()
 		lastStep.SetHExpand(true)
 		self.Box.Append(lastStep)
 		self.widgets = append(self.widgets, lastStep)
@@ -257,17 +388,31 @@ func (self *WidgetBox) setExpand(set bool) {
 	}
 }
 
-type MainCountLabel struct {
+func (self *WidgetBox) connectRevealer(revealer *widgetRevealer) {
+	for _, widget := range self.widgets {
+		widget.connectRevealer(revealer)
+	}
+}
+
+func (self *WidgetBox) addCSSClass(name string) {
+	self.AddCSSClass(name)
+}
+
+func (self *WidgetBox) removeCSSClass(name string) {
+	self.RemoveCSSClass(name)
+}
+
+type countLabel struct {
 	*gtk.Box
 	countable  Countable
 	labelTitle *gtk.Label
 	labelCount *gtk.Label
 }
 
-func newMainCountLabel(countable Countable) (self *MainCountLabel) {
-	self = &MainCountLabel{
+func newMainCountLabel() (self *countLabel) {
+	self = &countLabel{
 		gtk.NewBox(gtk.OrientationHorizontal, 0),
-		countable,
+		Countable(nil),
 		gtk.NewLabel("Count"),
 		gtk.NewLabel("---"),
 	}
@@ -283,36 +428,36 @@ func newMainCountLabel(countable Countable) (self *MainCountLabel) {
 	return
 }
 
-func (self *MainCountLabel) IncreaseBy(add int) {
+func (self *countLabel) IncreaseBy(add int) {
 	if !self.countable.IsNil() {
 		self.countable.IncreaseBy(add)
 	}
 }
 
-func (self *MainCountLabel) setCounter(countable Countable) {
-	if countable.IsNil() {
+func (self *countLabel) setCounter(countable Countable) {
+	if countable == Countable(nil) || countable.IsNil() {
 		return
 	}
 	self.countable = countable
-	self.countable.ConnectChanged("Count", reflect.TypeOf(self).String(), self.UpdateCount)
+	self.countable.ConnectChanged("Count", self.UpdateCount)
 	self.UpdateCount()
 }
 
-func (self *MainCountLabel) UpdateCount() {
+func (self *countLabel) UpdateCount() {
 	if self.countable == nil {
 		return
 	}
 	self.labelCount.SetText(self.String())
 }
 
-func (self *MainCountLabel) String() string {
+func (self *countLabel) String() string {
 	if self.countable != nil {
 		return fmt.Sprintf("%d", self.countable.GetCount())
 	}
 	return "---"
 }
 
-func (self *MainCountLabel) setBorder(setShown bool) {
+func (self *countLabel) setBorder(setShown bool) {
 	if setShown {
 		self.AddCSSClass("infoBoxShowBorder")
 	} else {
@@ -320,11 +465,11 @@ func (self *MainCountLabel) setBorder(setShown bool) {
 	}
 }
 
-func (self *MainCountLabel) setTitle(set bool) {
+func (self *countLabel) setTitle(set bool) {
 	self.labelTitle.SetVisible(set)
 }
 
-func (self *MainCountLabel) setExpand(set bool) {
+func (self *countLabel) setExpand(set bool) {
 	self.labelCount.SetVExpand(set)
 	if set {
 		self.labelCount.AddCSSClass("expandWidget")
@@ -333,7 +478,33 @@ func (self *MainCountLabel) setExpand(set bool) {
 	}
 }
 
-type mainTimeLabel struct {
+func (self *countLabel) connectRevealer(revealer *widgetRevealer) {
+	clickController := gtk.NewGestureClick()
+	clickController.ConnectPressed(func(_ int, _ float64, _ float64) {
+		if revealer.widgetType == MainCount {
+			revealer.setWidget(None)
+		} else {
+			self.AddCSSClass("selected")
+			revealer.setWidget(MainCount)
+			revealer.ConnectChanged("ChangeWidget", func() {
+				if revealer.widgetType == MainCount {
+					self.removeCSSClass("selected")
+				}
+			})
+		}
+	})
+	self.AddController(clickController)
+}
+
+func (self *countLabel) addCSSClass(name string) {
+	self.AddCSSClass(name)
+}
+
+func (self *countLabel) removeCSSClass(name string) {
+	self.RemoveCSSClass(name)
+}
+
+type timeLabel struct {
 	*gtk.Box
 
 	labelTitle *gtk.Label
@@ -343,12 +514,12 @@ type mainTimeLabel struct {
 	isPaused  bool
 }
 
-func newMainTimeLabel(countable Countable) (self *mainTimeLabel) {
-	self = &mainTimeLabel{
+func newMainTimeLabel() (self *timeLabel) {
+	self = &timeLabel{
 		gtk.NewBox(gtk.OrientationHorizontal, 0),
 		gtk.NewLabel("Time"),
 		gtk.NewLabel("---"),
-		countable,
+		Countable(nil),
 		true,
 	}
 
@@ -364,30 +535,30 @@ func newMainTimeLabel(countable Countable) (self *mainTimeLabel) {
 	return
 }
 
-func (self *mainTimeLabel) IncreaseBy(add int) {
+func (self *timeLabel) IncreaseBy(add int) {
 	if self.countable != nil {
 		self.countable.IncreaseBy(add)
 		self.isPaused = false
 	}
 }
 
-func (self *mainTimeLabel) setCounter(countable Countable) {
+func (self *timeLabel) setCounter(countable Countable) {
 	if countable.IsNil() {
 		return
 	}
 	self.countable = countable
-	self.countable.ConnectChanged("Time", reflect.TypeOf(self).Name(), self.UpdateTime)
+	self.countable.ConnectChanged("Time", self.UpdateTime)
 	self.UpdateTime()
 }
 
-func (self *mainTimeLabel) UpdateTime() {
+func (self *timeLabel) UpdateTime() {
 	if self.countable == nil {
 		return
 	}
 	self.labelTime.SetText(self.Time())
 }
 
-func (self *mainTimeLabel) Time() string {
+func (self *timeLabel) Time() string {
 	var time time.Duration
 	if self.countable != nil {
 		time = self.countable.GetTime()
@@ -401,21 +572,21 @@ func (self *mainTimeLabel) Time() string {
 	)
 }
 
-func (self *mainTimeLabel) AddTime(time time.Duration) {
+func (self *timeLabel) AddTime(time time.Duration) {
 	if self.countable != nil {
 		self.countable.AddTime(time)
 		self.UpdateTime()
 	}
 }
 
-func (self *mainTimeLabel) String() string {
+func (self *timeLabel) String() string {
 	if self.countable != nil {
 		return fmt.Sprintf("%d", self.countable.GetCount())
 	}
 	return "---"
 }
 
-func (self *mainTimeLabel) setBorder(setShown bool) {
+func (self *timeLabel) setBorder(setShown bool) {
 	if setShown {
 		self.AddCSSClass("infoBoxShowBorder")
 	} else {
@@ -423,17 +594,43 @@ func (self *mainTimeLabel) setBorder(setShown bool) {
 	}
 }
 
-func (self *mainTimeLabel) setTitle(set bool) {
+func (self *timeLabel) setTitle(set bool) {
 	self.labelTitle.SetVisible(set)
 }
 
-func (self *mainTimeLabel) setExpand(set bool) {
+func (self *timeLabel) setExpand(set bool) {
 	self.labelTime.SetVExpand(set)
 	if set {
 		self.labelTime.AddCSSClass("expandWidget")
 	} else {
 		self.labelTime.RemoveCSSClass("expandWidget")
 	}
+}
+
+func (self *timeLabel) connectRevealer(revealer *widgetRevealer) {
+	clickController := gtk.NewGestureClick()
+	clickController.ConnectPressed(func(_ int, _ float64, _ float64) {
+		if revealer.widgetType == MainTime {
+			revealer.setWidget(None)
+		} else {
+			self.AddCSSClass("selected")
+			revealer.setWidget(MainTime)
+			revealer.ConnectChanged("ChangeWidget", func() {
+				if revealer.widgetType == MainTime {
+					self.removeCSSClass("selected")
+				}
+			})
+		}
+	})
+	self.AddController(clickController)
+}
+
+func (self *timeLabel) addCSSClass(name string) {
+	self.AddCSSClass(name)
+}
+
+func (self *timeLabel) removeCSSClass(name string) {
+	self.RemoveCSSClass(name)
 }
 
 type mainProgressBar struct {
@@ -443,8 +640,13 @@ type mainProgressBar struct {
 	progressBar *gtk.ProgressBar
 }
 
-func newMainProgressBar(countable Countable) (this *mainProgressBar) {
-	this = &mainProgressBar{gtk.NewBox(gtk.OrientationHorizontal, 0), countable, nil, nil}
+func newMainProgressBar() (this *mainProgressBar) {
+	this = &mainProgressBar{
+		gtk.NewBox(gtk.OrientationHorizontal, 0),
+		Countable(nil),
+		nil,
+		nil,
+	}
 	title := gtk.NewLabel("Progress")
 	title.SetVisible(false)
 	progressBar := gtk.NewProgressBar()
@@ -469,7 +671,7 @@ func (self *mainProgressBar) setCounter(countable Countable) {
 		return
 	}
 	self.countable = countable
-	self.countable.ConnectChanged("Count", reflect.TypeOf(self).String(), self.UpdateCount)
+	self.countable.ConnectChanged("Count", self.UpdateCount)
 	self.UpdateCount()
 }
 
@@ -536,40 +738,57 @@ func (self *mainProgressBar) setExpand(set bool) {
 	}
 }
 
-type labelStepTime struct {
+func (self *mainProgressBar) connectRevealer(revealer *widgetRevealer) {
+	clickController := gtk.NewGestureClick()
+	clickController.ConnectPressed(func(_ int, _ float64, _ float64) {
+		if revealer.widgetType == ProgressBar {
+			revealer.setWidget(None)
+		} else {
+			self.AddCSSClass("selected")
+			revealer.setWidget(ProgressBar)
+			revealer.ConnectChanged("ChangeWidget", func() {
+				if revealer.widgetType == ProgressBar {
+					self.removeCSSClass("selected")
+				}
+			})
+		}
+	})
+	self.AddController(clickController)
+}
+
+func (self *mainProgressBar) addCSSClass(name string) {
+	self.AddCSSClass(name)
+}
+
+func (self *mainProgressBar) removeCSSClass(name string) {
+	self.RemoveCSSClass(name)
+}
+
+type stepTime struct {
 	*gtk.Box
 	countable Countable
 	title     *gtk.Label
 	label     *gtk.Label
 }
 
-func newStepTime(countable Countable) (this *labelStepTime) {
-	this = &labelStepTime{nil, countable, nil, nil}
-	this.Box = gtk.NewBox(gtk.OrientationHorizontal, 0)
-	this.title = gtk.NewLabel("Time per Step")
-	this.title.SetName("title")
-	this.title.SetVisible(false)
-	this.label = gtk.NewLabel("---")
-	this.label.AddCSSClass("shortTimeLabel")
-	this.Box.Append(this.title)
-	this.Box.Append(this.label)
-	this.Box.AddCSSClass("infoBoxRow")
-	if countable.IsNil() {
-		return
+func newStepTime() (self *stepTime) {
+	self = &stepTime{
+		gtk.NewBox(gtk.OrientationHorizontal, 0),
+		Countable(nil),
+		gtk.NewLabel("Time per Step"),
+		gtk.NewLabel("---"),
 	}
-
-	var stepTime time.Duration
-	if countable.GetCount() != 0 {
-		stepTime = time.Duration(int(countable.GetTime())/countable.GetCount() + 1)
-	} else {
-		stepTime = 0
-	}
-	this.label.SetText(shortFormatTime(stepTime))
-	this.countable = countable
+	self.title.SetName("title")
+	self.title.SetVisible(false)
+	self.label.AddCSSClass("shortTimeLabel")
+	self.label.SetHExpand(true)
+	self.Box.Append(self.title)
+	self.Box.Append(self.label)
+	self.Box.AddCSSClass("infoBoxRow")
 	return
 }
 
-func (self *labelStepTime) setCounter(countable Countable) {
+func (self *stepTime) setCounter(countable Countable) {
 	if countable.IsNil() {
 		return
 	}
@@ -583,7 +802,7 @@ func (self *labelStepTime) setCounter(countable Countable) {
 	}
 	self.label.SetText(shortFormatTime(stepTime))
 
-	countable.ConnectChanged("Count", reflect.TypeOf(self).String(), func() {
+	countable.ConnectChanged("Count", func() {
 		var stepTime time.Duration
 		if countable.GetCount() != 0 {
 			stepTime = time.Duration(int(countable.GetTime())/countable.GetCount() + 1)
@@ -594,7 +813,7 @@ func (self *labelStepTime) setCounter(countable Countable) {
 	})
 }
 
-func (self *labelStepTime) setBorder(setShown bool) {
+func (self *stepTime) setBorder(setShown bool) {
 	if setShown {
 		self.AddCSSClass("infoBoxShowBorder")
 	} else {
@@ -602,7 +821,7 @@ func (self *labelStepTime) setBorder(setShown bool) {
 	}
 }
 
-func (self *labelStepTime) setTitle(set bool) {
+func (self *stepTime) setTitle(set bool) {
 	if set {
 		self.title.SetVisible(true)
 	} else {
@@ -610,7 +829,7 @@ func (self *labelStepTime) setTitle(set bool) {
 	}
 }
 
-func (self *labelStepTime) setExpand(set bool) {
+func (self *stepTime) setExpand(set bool) {
 	self.label.SetVExpand(set)
 	if set {
 		self.label.AddCSSClass("expandWidget")
@@ -619,20 +838,46 @@ func (self *labelStepTime) setExpand(set bool) {
 	}
 }
 
+func (self *stepTime) connectRevealer(revealer *widgetRevealer) {
+	clickController := gtk.NewGestureClick()
+	clickController.ConnectPressed(func(_ int, _ float64, _ float64) {
+		if revealer.widgetType == StepTime {
+			revealer.setWidget(None)
+		} else {
+			self.AddCSSClass("selected")
+			revealer.setWidget(StepTime)
+			revealer.ConnectChanged("ChangeWidget", func() {
+				if revealer.widgetType == StepTime {
+					self.removeCSSClass("selected")
+				}
+			})
+		}
+	})
+	self.AddController(clickController)
+}
+
+func (self *stepTime) addCSSClass(name string) {
+	self.AddCSSClass(name)
+}
+
+func (self *stepTime) removeCSSClass(name string) {
+	self.RemoveCSSClass(name)
+}
+
 type lastStepTime struct {
 	*gtk.Box
 
 	countable Countable
 	lastTime  time.Duration
 
-	title         *gtk.Label
-	labelLastStep *gtk.Label
+	title *gtk.Label
+	label *gtk.Label
 }
 
-func newLastStepTime(countable Countable) (self *lastStepTime) {
+func newLastStepTime() (self *lastStepTime) {
 	self = &lastStepTime{
 		gtk.NewBox(gtk.OrientationHorizontal, 0),
-		countable,
+		Countable(nil),
 		-1,
 		gtk.NewLabel("Last Step"),
 		gtk.NewLabel("---"),
@@ -640,27 +885,29 @@ func newLastStepTime(countable Countable) (self *lastStepTime) {
 
 	self.Box.AddCSSClass("infoBoxRow")
 	self.Box.Append(self.title)
-	self.Box.Append(self.labelLastStep)
+	self.Box.Append(self.label)
 	self.title.SetName("title")
 	self.title.SetVisible(false)
-	self.labelLastStep.AddCSSClass("shortTimeLabel")
+	self.label.AddCSSClass("shortTimeLabel")
+	self.label.SetHExpand(true)
 
 	return
 }
 
 func (self *lastStepTime) setCounter(countable Countable) {
+	println("here")
 	self.countable = countable
 	if self.countable.IsNil() {
 		self.lastTime = 0
 		return
 	}
 
-	self.countable.ConnectChanged("Count", reflect.TypeOf(self).String(), func() {
+	self.countable.ConnectChanged("Count", func() {
 		if self.lastTime == -1 {
 			self.lastTime = self.countable.GetTime()
 			return
 		}
-		self.labelLastStep.SetText(shortFormatTime(self.countable.GetTime() - self.lastTime))
+		self.label.SetText(shortFormatTime(self.countable.GetTime() - self.lastTime))
 		self.lastTime = self.countable.GetTime()
 	})
 }
@@ -678,12 +925,38 @@ func (self *lastStepTime) setTitle(set bool) {
 }
 
 func (self *lastStepTime) setExpand(set bool) {
-	self.labelLastStep.SetVExpand(set)
+	self.label.SetVExpand(set)
 	if set {
-		self.labelLastStep.AddCSSClass("expandWidget")
+		self.label.AddCSSClass("expandWidget")
 	} else {
-		self.labelLastStep.RemoveCSSClass("expandWidget")
+		self.label.RemoveCSSClass("expandWidget")
 	}
+}
+
+func (self *lastStepTime) connectRevealer(revealer *widgetRevealer) {
+	clickController := gtk.NewGestureClick()
+	clickController.ConnectPressed(func(_ int, _ float64, _ float64) {
+		if revealer.widgetType == LastStepTime {
+			revealer.setWidget(None)
+		} else {
+			self.AddCSSClass("selected")
+			revealer.setWidget(LastStepTime)
+			revealer.ConnectChanged("ChangeWidget", func() {
+				if revealer.widgetType == LastStepTime {
+					self.removeCSSClass("selected")
+				}
+			})
+		}
+	})
+	self.AddController(clickController)
+}
+
+func (self *lastStepTime) addCSSClass(name string) {
+	self.AddCSSClass(name)
+}
+
+func (self *lastStepTime) removeCSSClass(name string) {
+	self.RemoveCSSClass(name)
 }
 
 type overallLuck struct {
@@ -741,7 +1014,7 @@ func (self *overallLuck) setCounter(countable Countable) {
 	if countable.IsNil() {
 		return
 	}
-	countable.ConnectChanged("Count", reflect.TypeOf(self).String(), func() {
+	countable.ConnectChanged("Count", func() {
 		self.setProgress()
 	})
 }
@@ -767,6 +1040,24 @@ func (self *overallLuck) setExpand(set bool) {
 	}
 }
 
+func (self *overallLuck) connectRevealer(revealer *widgetRevealer) {
+	clickController := gtk.NewGestureClick()
+	clickController.ConnectPressed(func(_ int, _ float64, _ float64) {
+		if revealer.widgetType == OverallLuck {
+			revealer.setWidget(None)
+		} else {
+			self.AddCSSClass("selected")
+			revealer.setWidget(OverallLuck)
+			revealer.ConnectChanged("ChangeWidget", func() {
+				if revealer.widgetType == OverallLuck {
+					self.removeCSSClass("selected")
+				}
+			})
+		}
+	})
+	self.AddController(clickController)
+}
+
 func formatTime(duration time.Duration) (format string) {
 	format = fmt.Sprintf(
 		"%02dh %02dm %02ds %03d",
@@ -777,6 +1068,14 @@ func formatTime(duration time.Duration) (format string) {
 	)
 
 	return
+}
+
+func (self *overallLuck) addCSSClass(name string) {
+	self.AddCSSClass(name)
+}
+
+func (self *overallLuck) removeCSSClass(name string) {
+	self.RemoveCSSClass(name)
 }
 
 func shortFormatTime(duration time.Duration) (format string) {

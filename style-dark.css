@@ -1,0 +1,257 @@
+grid {
+    border: 0px;
+}
+
+button {
+    border: 0px;
+    background: #444444;
+}
+
+separator {
+    background: #CCCCCC;
+}
+
+row:selected {
+    background: rgba(139, 233, 253, 1);
+    color: black;
+}
+
+#settingsButton {
+    padding: 3px;
+    padding-right: 4px;
+}
+
+#settingsButton image {
+    color: white;
+    padding: 0px;
+    margin: 4px;
+}
+
+dialog {
+    background: transparent;
+}
+
+.activatable {
+    box-shadow: none;
+}
+
+.counterTreeView {
+    padding: 8px;
+}
+
+.counterTreeView .counterRow {
+    margin-top: 4px;
+    border-top: 1px solid;
+}
+
+.counterTreeView expander {
+    padding-left: 6px;
+}
+
+.counterTreeView separator:hover {
+    background: transparent;
+}
+
+.counterTreeView row {
+    padding: 4px;
+    border-radius: 14px;
+}
+
+.treeViewShim {
+    margin: 2px;
+    font-size: 0px;
+}
+
+.counterTreeView label {
+    font-size: 16px;
+    padding: 5px;
+}
+
+.phaseRow {
+    margin-left: 36px;
+}
+
+.phaseRow label {
+    margin-left: 6px;
+}
+
+#buttonAddPhase {
+    margin: 0px;
+    padding: 0px;
+    padding-left: 6px;
+    padding-right: 6px;
+    border-radius: 12px;
+}
+
+#treeViewScrollWindow {
+    min-width: 300px;
+}
+
+.buttonAddPhase label {
+    font-size: 14px;
+}
+
+.settingsListView {
+    padding: 8px;
+}
+
+.settingsListView row {
+    padding: 4px;
+    border-radius: 14px;
+}
+
+.settingsListView label {
+    font-size: 16px;
+    padding: 5px;
+}
+
+.labelMainTime {
+    min-width: 160px;
+    font-size: 24px;
+    margin-top: 16px;
+    margin-bottom: 8px;
+}
+
+.progressGreen progress {
+    background: #50FA7B;
+}
+
+.progressYellow progress {
+    background: #F1FA8C;
+}
+
+.progressOrange progress {
+    background: #FFB86C;
+}
+
+.progressRed progress {
+    background: #FF9580;
+}
+
+#treeViewContext {
+    border-radius: 4px;
+}
+
+#treeViewContext list {
+    margin: 2px;
+}
+
+#treeViewContext row {
+    min-width: 200px;
+    border-radius: 8px;
+    padding: 1px;
+    box-shadow: none;
+}
+
+#treeViewContext row:hover {
+    box-shadow: none;
+}
+
+#treeViewContext contents {
+    margin: 4px;
+    padding: 4px;
+}
+
+.editDialogBox {
+    padding: 16px;
+    padding-bottom : 0px;
+}
+
+.editDialogBox button {
+    margin-left: 12px;
+}
+
+.editDialogButtonRow {
+    margin-top: 36px;
+    margin-bottom: 8px;
+}
+
+.editDialogRow {
+    margin: 4px;
+    border-radius: 8px;
+    padding: 6px;
+    padding-left: 24px;
+    padding-right: 16px;
+    margin-right: 28px;
+}
+
+.editDialogBox entry:nth-child(2) {
+    margin-left: 64px;
+}
+
+.editDialogBox label:first-child {
+    font-size: 18px;
+}
+
+.infoBoxRow label {
+    margin: 8px;
+    margin-right: 16px;
+}
+
+.infoBoxRow {
+    min-height: 80px;
+    font-size: 24px;
+    margin-left: 16px;
+}
+
+.infoBoxRow #title {
+    font-size: 20px;
+}
+
+#infoToggleButton {
+    background: none;
+    box-shadow: none;
+    margin: 8px;
+    border-radius: 24px;
+}
+
+progressbar {
+    padding: 12px;
+    padding-bottom: 0px;
+    margin-bottom: 0px;
+}
+
+progressbar * {
+    min-height: 16px;
+    border: 0px;
+    font-size: 14px;
+}
+
+progress {
+    margin: 0px;
+}
+
+.infoBoxShowBorder {
+    margin: 4px;
+    background: #444444;
+    border-radius: 12px;
+}
+
+.infoBox {
+    margin: 4px;
+}
+
+.longTimeLabel {
+    min-width: 160px;
+}
+
+.shortTimeLabel {
+    min-width: 80px;
+}
+
+.WidgetRevealer box {
+    margin: 32px;
+}
+
+.WidgetRevealer label {
+    font-size: 56px;
+}
+
+#RevealerTitle {
+    font-size: 28px;
+}
+
+#widget, .selected {
+    background: rgba(139, 233, 253, 1);
+    color: black;
+}
