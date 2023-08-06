@@ -4,9 +4,7 @@ go 1.20
 
 require github.com/diamondburned/gotk4/pkg v0.0.5
 
-require github.com/montanaflynn/stats v0.7.1
-
-require golang.org/x/exp v0.0.0-20230801115018-d63ba01acd4b // indirect
+require golang.org/x/exp v0.0.0-20230801115018-d63ba01acd4b
 
 require (
 	github.com/gvalkov/golang-evdev v0.0.0-20220815104727-7e27d6ce89b6

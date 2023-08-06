@@ -206,9 +206,7 @@ dialog {
 }
 
 progressbar {
-    padding: 12px;
-    padding-bottom: 0px;
-    margin-bottom: 0px;
+    padding: 8px;
 }
 
 progressbar * {
@@ -219,6 +217,10 @@ progressbar * {
 
 progress {
     margin: 0px;
+}
+
+progressbar trough {
+    border-radius: 6px;
 }
 
 .infoBoxShowBorder {

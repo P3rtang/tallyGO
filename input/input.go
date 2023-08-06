@@ -77,6 +77,9 @@ func (self *DevInput) fileInit() {
 }
 
 func (self *DevInput) readEvent(hasEvent chan bool) {
+	if self.file == nil {
+		return
+	}
 	events, _ := self.file.Read()
 	for _, event := range events {
 		if event.Type != 1 {
@@ -90,7 +93,7 @@ func (self *DevInput) readEvent(hasEvent chan bool) {
 }
 
 func (self *DevInput) Init(file string) (err error) {
-	self.ChangeFile(file)
+	err = self.ChangeFile(file)
 	go func() {
 		for self.isRunning {
 			event := self.NextEvent()

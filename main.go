@@ -2,17 +2,16 @@ package main
 
 import (
 	_ "embed"
-	"encoding/gob"
+	"encoding/json"
 	"fmt"
-	"math"
+	"log"
 	"os"
 	"reflect"
 	"strconv"
+	. "tallyGo/countable"
 	"tallyGo/input"
 	"tallyGo/settings"
 	"time"
-
-	"github.com/montanaflynn/stats"
 
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
@@ -21,6 +20,7 @@ import (
 )
 
 const FRAME_TIME = time.Millisecond * 33
+const SAVE_STRATEGY = JSON
 
 //go:embed style.css
 var CSS_FILE string
@@ -85,8 +85,8 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 	self.SetTitle("tallyGo")
 
 	savePath, _ := os.UserHomeDir()
-	savePath += "/.local/share/tallyGo/ProgramData"
-	saveDataHandler := NewSaveFileHandler(savePath)
+	savePath += "/.local/share/tallyGo/ProgramData.json"
+	saveDataHandler := NewSaveFileHandler(savePath, SAVE_STRATEGY)
 	saveDataHandler.Restore()
 
 	self.settings = saveDataHandler.SettingsData
@@ -96,7 +96,7 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 
 	counters := NewCounterList(saveDataHandler.CounterData)
 	app.ConnectShutdown(func() {
-		saveDataHandler.CounterData = counters.list
+		saveDataHandler.CounterData = counters.List
 		saveDataHandler.Save()
 	})
 
@@ -155,9 +155,15 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 	self.homeGrid.Attach(infoBoxScroll, 1, 2, 1, 1)
 
 	inputHandler := input.NewDevInput()
-	inputHandler.Init(self.settings.GetValue(settings.ActiveKeyboard).(string))
+	err := inputHandler.Init(self.settings.GetValue(settings.ActiveKeyboard).(string))
+	if err != nil {
+		log.Println("[WARN] Could not initialize keyboard. Got Error: ", err)
+	}
 	self.settings.ConnectChanged(settings.ActiveKeyboard, func(value interface{}) {
-		inputHandler.ChangeFile(value.(string))
+		err := inputHandler.ChangeFile(value.(string))
+		if err != nil {
+			log.Println("[WARN] Could not initialize keyboard. Got Error: ", err)
+		}
 	})
 
 	eventController := gtk.NewEventControllerKey()
@@ -217,6 +223,9 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 }
 
 func (self *HomeApplicationWindow) setCSSTheme(css *gtk.CSSProvider) {
+	if self.settings.GetValue(settings.DarkMode) == nil {
+		self.settings.SetValue(settings.DarkMode, false)
+	}
 	if self.settings.GetValue(settings.DarkMode).(bool) {
 		gtk.SettingsGetDefault().SetObjectProperty("gtk-theme-name", "Adwaita-dark")
 		css.LoadFromData(CSS_DARK)
@@ -248,338 +257,6 @@ func (self *HomeApplicationWindow) HandleNotify() {
 		self.headerBar.SetVisible(true)
 	}
 }
-
-type CounterList struct {
-	list []*Counter
-}
-
-func NewCounterList(list []*Counter) *CounterList {
-	return &CounterList{list}
-}
-
-func (self *CounterList) Remove(counter *Counter) {
-	if idx, ok := self.GetIdx(counter); ok {
-		if idx < len(self.list)-1 {
-			self.list = append(self.list[:idx], self.list[idx+1:len(self.list)]...)
-
-		} else {
-			self.list = self.list[:idx]
-		}
-	}
-}
-
-func (self *CounterList) GetIdx(counter *Counter) (int, bool) {
-	for idx, c := range self.list {
-		if c == counter {
-			return idx, true
-		}
-	}
-	return 0, false
-}
-
-func (self *CounterList) meanChance() float64 {
-	var sum float64
-	for _, c := range self.list {
-		sum += float64(c.GetChance())
-	}
-	return sum / float64(len(self.list))
-}
-
-func (self *CounterList) stdDev() float64 {
-	if len(self.list) < 2 {
-		return math.Sqrt(math.Pow(float64(self.list[0].GetOdds()), 2)/12) / float64(self.list[0].GetOdds())
-	}
-	mean := self.meanChance()
-	var deviationNumerator float64
-	for _, c := range self.list {
-		deviationNumerator += math.Pow((float64(c.GetChance()) - mean), 2)
-	}
-	return math.Sqrt(deviationNumerator / (float64(len(self.list)) - 1))
-}
-
-func (self *CounterList) Luck() (luck float64) {
-	zScore := (1/math.E - self.meanChance()) / self.stdDev()
-	return 1 - stats.NormCdf(zScore, 0, 1)
-}
-
-type Countable interface {
-	GetName() (name string)
-	SetName(name string)
-
-	GetCount() int
-	SetCount(num int)
-	IncreaseBy(add int)
-
-	AddTime(time time.Duration)
-	SetTime(time time.Duration)
-	GetTime() time.Duration
-
-	GetProgress() float64
-	GetProgressType() ProgressType
-
-	ConnectChanged(field string, f func())
-	callback(field string)
-
-	IsNil() bool
-}
-
-type Counter struct {
-	Name         string
-	Phases       []*Phase
-	ProgressType ProgressType
-
-	callbackChange map[string][]func()
-}
-
-func newCounter(name string, _ int, progressType ProgressType) (counter *Counter) {
-	counter = &Counter{name, []*Phase{}, progressType, nil}
-	counter.NewPhase(progressType)
-	return
-}
-
-func (self *Counter) ConnectChanged(field string, f func()) {
-	if self.callbackChange == nil {
-		self.callbackChange = map[string][]func(){}
-	}
-	if field == "Name" {
-		self.callbackChange[field] = append(self.callbackChange[field], f)
-	} else {
-		for _, phase := range self.Phases {
-			phase.ConnectChanged(field, f)
-		}
-	}
-}
-
-func (self *Counter) GetName() (name string) {
-	return self.Name
-}
-
-func (self *Counter) SetName(name string) {
-	self.Name = name
-	self.callback("Name")
-}
-
-func (self *Counter) NewPhase(progressType ProgressType) *Phase {
-	phaseName := fmt.Sprintf("Phase_%d", len(self.Phases)+1)
-	newPhase := &Phase{
-		phaseName,
-		0,
-		time.Duration(0),
-		newProgress(progressType),
-		false,
-		map[string][]func(){},
-	}
-	self.Phases = append(self.Phases, newPhase)
-
-	return newPhase
-}
-
-func (self *Counter) GetChance() (chance float64) {
-	chance = math.Pow(1-1/float64(self.GetOdds()), float64(self.GetCount()))
-	return
-}
-
-func (self *Counter) GetOdds() (odds int) {
-	switch self.ProgressType {
-	case OldOdds:
-		odds = 8192
-	case NewOdds:
-		odds = 4096
-	}
-
-	return
-}
-
-func (self *Counter) GetCount() (count int) {
-	for _, phase := range self.Phases {
-		count += phase.Count
-	}
-	return
-}
-
-func (self *Counter) SetCount(num int) {
-	diff := num - self.GetCount()
-	self.Phases[len(self.Phases)-1].IncreaseBy(diff)
-}
-
-func (self *Counter) IncreaseBy(add int) {
-	self.Phases[len(self.Phases)-1].IncreaseBy(add)
-	self.UpdateProgress()
-}
-
-func (self *Counter) GetTime() (time time.Duration) {
-	for _, phase := range self.Phases {
-		time += phase.Time
-	}
-	return
-}
-
-func (self *Counter) SetTime(time time.Duration) {
-	diff := self.GetTime() - time
-	self.Phases[len(self.Phases)-1].AddTime(diff)
-}
-
-func (self *Counter) AddTime(time time.Duration) {
-	self.Phases[len(self.Phases)-1].AddTime(time)
-}
-
-func (self *Counter) GetProgress() (progress float64) {
-	for _, phase := range self.Phases {
-		progress += phase.Progress.Progress
-	}
-	return
-}
-
-func (self *Counter) GetProgressType() ProgressType {
-	return self.Phases[0].Progress.Type
-}
-
-func (self *Counter) SetProgressType(type_ ProgressType) {
-	self.ProgressType = type_
-}
-
-func (self *Counter) UpdateProgress() {
-	for _, phase := range self.Phases {
-		phase.UpdateProgress()
-	}
-}
-
-func (self *Counter) callback(field string) {
-	if field == "Name" {
-		for _, f := range self.callbackChange[field] {
-			f()
-		}
-	} else {
-		for _, p := range self.Phases {
-			p.callback(field)
-		}
-	}
-}
-
-func (self *Counter) IsNil() bool {
-	return self == nil
-}
-
-type Phase struct {
-	Name     string
-	Count    int
-	Time     time.Duration
-	Progress *Progress
-	IsLocked bool
-
-	callbackChange map[string][]func()
-}
-
-func (self *Phase) ConnectChanged(field string, f func()) {
-	if self.callbackChange == nil {
-		self.callbackChange = map[string][]func(){}
-	}
-	self.callbackChange[field] = append(self.callbackChange[field], f)
-}
-
-func (self *Phase) GetName() (name string) {
-	return self.Name
-}
-
-func (self *Phase) SetName(name string) {
-	self.Name = name
-	self.callback("Name")
-}
-
-func (self *Phase) GetCount() int {
-	return self.Count
-}
-
-func (self *Phase) SetCount(num int) {
-	self.Count = num
-	self.UpdateProgress()
-	self.callback("Count")
-}
-
-func (self *Phase) IncreaseBy(add int) {
-	if self.IsLocked {
-		return
-	}
-	self.Count += add
-	self.UpdateProgress()
-	self.callback("Count")
-}
-
-func (self *Phase) GetTime() time.Duration {
-	return self.Time
-}
-
-func (self *Phase) SetTime(time time.Duration) {
-	self.Time = time
-	self.callback("Time")
-}
-
-func (self *Phase) AddTime(time time.Duration) {
-	if self.IsLocked {
-		return
-	}
-	self.Time += time
-	self.callback("Time")
-}
-
-func (self *Phase) GetProgress() float64 {
-	return self.Progress.Progress
-}
-
-func (self *Phase) GetProgressType() ProgressType {
-	return self.Progress.Type
-}
-
-func (self *Phase) SetProgressType(type_ ProgressType) {
-	self.Progress.Type = type_
-}
-
-func (self *Phase) UpdateProgress() {
-	switch self.Progress.Type {
-	case OldOdds:
-		self.Progress.Progress = math.Pow(float64(1.0-1.0/8192.0), float64(self.Count))
-	case NewOdds:
-		self.Progress.Progress = math.Pow(float64(1.0-1.0/4096.0), float64(self.Count))
-	}
-}
-
-func (self *Phase) callback(field string) {
-	for _, f := range self.callbackChange[field] {
-		f()
-	}
-}
-
-func (self *Phase) IsNil() bool {
-	return self == nil
-}
-
-type callBackType int
-
-const (
-	Count callBackType = iota
-	Time
-)
-
-type Progress struct {
-	Type     ProgressType
-	Progress float64
-}
-
-func newProgress(type_ ProgressType) *Progress {
-	return &Progress{
-		type_,
-		0.0,
-	}
-}
-
-type ProgressType int
-
-const (
-	OldOdds ProgressType = iota
-	NewOdds
-	SOS
-	DexNav
-)
 
 func createColumn(title string, id int) *gtk.TreeViewColumn {
 	cellRenderer := gtk.NewCellRendererText()
@@ -626,15 +303,15 @@ func newCounterTreeView(cList *CounterList, homeWindow *HomeApplicationWindow) (
 
 	newCounterButton := gtk.NewButtonWithLabel("New Counter")
 	newCounterButton.ConnectClicked(func() {
-		counter := newCounter("Test", 0, OldOdds)
+		counter := NewCounter("Test", 0, OldOdds)
 		self.addCounter(counter, cList)
 
-		cList.list = append(cList.list, counter)
+		cList.List = append(cList.List, counter)
 	})
 
 	store.Append(newCounterButton.Object)
 
-	for _, counter := range cList.list {
+	for _, counter := range cList.List {
 		self.addCounter(counter, cList)
 	}
 
@@ -657,6 +334,16 @@ func (self *CounterTreeView) addCounter(counter *Counter, cList *CounterList) {
 		dialog := NewEditDialog(counter)
 		dialog.Show()
 	})
+	expander.contextMenu.ConnectRowClick("mark complete", func() {
+		if counter.IsCompleted() {
+			counter.SetCompleted(false)
+			expander.contextMenu.rows["mark complete"].SetText("mark complete")
+		} else {
+			counter.SetCompleted(true)
+			expander.contextMenu.rows["mark complete"].SetText("mark in progress")
+		}
+	})
+
 	self.expanders = append(self.expanders, expander)
 
 	items := self.store.NItems()
@@ -771,7 +458,20 @@ func newCounterExpander(counter *Counter) (self *CounterExpander) {
 	button.SetName("buttonAddPhase")
 	button.ConnectClicked(func() {
 		phase := counter.NewPhase(counter.ProgressType)
-		store.Append(newPhaseRow(phase).Object)
+		row := newPhaseRow(phase)
+		row.contextMenu.ConnectRowClick("delete", func() {
+			fmt.Println(self.counter.Phases)
+			for i, p := range self.counter.Phases {
+				if p == phase {
+					self.counter.Phases = append(self.counter.Phases[:i], self.counter.Phases[i+1:]...)
+					idx, ok := store.Find(row.Object)
+					if ok {
+						store.Remove(idx)
+					}
+				}
+			}
+		})
+		store.Append(row.Object)
 	})
 
 	box.Append(label)
@@ -779,13 +479,32 @@ func newCounterExpander(counter *Counter) (self *CounterExpander) {
 	expander.SetChild(box)
 
 	contextMenu := newTreeRowContextMenu()
+	contextMenu.NewRow("mark complete")
 	contextMenu.NewRow("edit")
 	contextMenu.NewRow("delete")
 	contextMenu.SetParent(&box.Widget)
 
+	if !counter.IsCompleted() {
+		contextMenu.rows["mark complete"].SetText("mark complete")
+	} else {
+		contextMenu.rows["mark complete"].SetText("mark in progress")
+	}
+
 	for _, phase := range counter.Phases {
-		label := newPhaseRow(phase)
-		store.Append(label.Object)
+		row := newPhaseRow(phase)
+		row.contextMenu.ConnectRowClick("delete", func() {
+			for i, p := range self.counter.Phases {
+				if p == phase {
+					println(i)
+					self.counter.Phases = append(self.counter.Phases[:i])
+					idx, ok := store.Find(row.Object)
+					if ok {
+						store.Remove(idx)
+					}
+				}
+			}
+		})
+		store.Append(row.Object)
 	}
 
 	self = &CounterExpander{expander, counter, store, contextMenu}
@@ -904,7 +623,10 @@ func newPhaseRow(phase *Phase) (self *PhaseRow) {
 	})
 
 	contextMenu.ConnectRowClick("lock", func() {
-		phase.IsLocked = !phase.IsLocked
+		phase.SetCompleted(!phase.IsCompleted)
+	})
+
+	phase.ConnectChanged("IsCompleted", func() {
 		self.UpdateLock()
 	})
 
@@ -914,7 +636,7 @@ func newPhaseRow(phase *Phase) (self *PhaseRow) {
 func (self *PhaseRow) UpdateLock() {
 	label := self.contextMenu.rows["lock"]
 
-	if !self.phase.IsLocked {
+	if !self.phase.IsCompleted {
 		self.lock.SetFromIconName("padlock-unlocked")
 		label.SetText("lock")
 	} else {
@@ -954,7 +676,7 @@ func NewEditDialog(countable Countable) *EditDialog {
 		this.NewRow("Name", phase.Name)
 		this.NewRow("Count", phase.Count)
 		this.NewRow("Time", phase.Time)
-		this.NewRow("HuntType", fmt.Sprint(phase.Progress.Type))
+		this.NewRow("HuntType", fmt.Sprint(phase.Progress.GetType()))
 		this.AddButton("cancel", func() {
 			this.Close()
 		})
@@ -1137,35 +859,55 @@ func (self *TypedEntry[int]) Int() int64 {
 	return int64(value)
 }
 
+type SaveStrategy string
+
+const (
+	Binary SaveStrategy = "Binary"
+	JSON                = "JSON"
+)
+
 type SaveFileHandler struct {
 	filePath     string
 	CounterData  []*Counter
 	SettingsData *settings.Settings
+
+	strategy SaveStrategy
 }
 
-func NewSaveFileHandler(path string) *SaveFileHandler {
+func NewSaveFileHandler(path string, strategy SaveStrategy) *SaveFileHandler {
 	return &SaveFileHandler{
 		path,
 		nil,
 		nil,
+		strategy,
 	}
 }
 
 func (self *SaveFileHandler) Save() (err error) {
-	file, err := os.OpenFile(self.filePath, os.O_RDWR, 0666)
-	encoder := gob.NewEncoder(file)
-	if err = encoder.Encode(self); err != nil {
-		fmt.Printf("Could not save program got error: %v\n", err)
+	var saveData []byte
+	if saveData, err = json.Marshal(self); err != nil {
+		return
 	}
+	os.WriteFile(self.filePath, saveData, 0666)
 	return
 }
 
 func (self *SaveFileHandler) Restore() (err error) {
-	file, err := os.Open(self.filePath)
-	decoder := gob.NewDecoder(file)
-	decoder.Decode(self)
+	var saveData []byte
+	if saveData, err = os.ReadFile(self.filePath); err != nil {
+		return
+	}
+
+	err = json.Unmarshal(saveData, self)
+	if err != nil {
+		self.SettingsData = settings.NewSettings()
+		log.Println("[WARN] Could not Unmarshal SaveData, Got Error: ", err)
+		return
+	}
+
 	if self.SettingsData == nil {
 		self.SettingsData = settings.NewSettings()
 	}
+
 	return
 }

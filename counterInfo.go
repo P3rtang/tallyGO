@@ -5,6 +5,8 @@ import (
 	"log"
 	"time"
 
+	. "tallyGo/countable"
+
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"golang.org/x/exp/slices"
 )
@@ -180,9 +182,6 @@ func (self *infoBox) AddWidget(type_ widgetType, showBorder bool) {
 
 func (self *infoBox) SetCounter(countable Countable) {
 	self.countable = countable
-	if !self.countable.IsNil() {
-		println(countable.GetName())
-	}
 	for _, widget := range self.widgets {
 		widget.setCounter(countable)
 	}
@@ -895,7 +894,6 @@ func newLastStepTime() (self *lastStepTime) {
 }
 
 func (self *lastStepTime) setCounter(countable Countable) {
-	println("here")
 	self.countable = countable
 	if self.countable.IsNil() {
 		self.lastTime = 0
@@ -981,6 +979,7 @@ func newOverallLuck(list *CounterList) (self *overallLuck) {
 	self.Box.AddCSSClass("infoBoxRow")
 
 	self.title.SetName("title")
+	self.luck.SetVAlign(gtk.AlignCenter)
 	self.setProgress()
 
 	return
@@ -1015,6 +1014,10 @@ func (self *overallLuck) setCounter(countable Countable) {
 		return
 	}
 	countable.ConnectChanged("Count", func() {
+		self.setProgress()
+	})
+
+	countable.ConnectChanged("IsCompleted", func() {
 		self.setProgress()
 	})
 }
