@@ -10,12 +10,14 @@ type Countable interface {
 	SetCount(num int)
 	IncreaseBy(add int)
 
-	AddTime(time time.Duration)
-	SetTime(time time.Duration)
+	AddTime(time.Duration)
+	SetTime(time.Duration)
 	GetTime() time.Duration
 
 	GetProgress() float64
 	GetProgressType() ProgressType
+	HasCharm() bool
+	SetCharm(bool)
 
 	ConnectChanged(field string, f func())
 	callback(field string)

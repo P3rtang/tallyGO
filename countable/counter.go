@@ -147,6 +147,21 @@ func (self *Counter) UpdateProgress() {
 	}
 }
 
+func (self *Counter) HasCharm() bool {
+	for _, p := range self.Phases {
+		if !p.HasCharm() {
+			return false
+		}
+	}
+	return true
+}
+
+func (self *Counter) SetCharm(hasCharm bool) {
+	for _, p := range self.Phases {
+		p.SetCharm(hasCharm)
+	}
+}
+
 func (self *Counter) IsCompleted() (isCompleted bool) {
 	for _, p := range self.Phases {
 		if !p.IsCompleted {

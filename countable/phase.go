@@ -93,6 +93,14 @@ func (self *Phase) UpdateProgress() {
 	self.Progress.SetRollsFromCount(self.Count)
 }
 
+func (self *Phase) HasCharm() bool {
+	return self.Progress.Charm()
+}
+
+func (self *Phase) SetCharm(hasCharm bool) {
+	self.Progress.SetCharm(hasCharm)
+}
+
 func (self *Phase) SetCompleted(isCompleted bool) {
 	self.IsCompleted = isCompleted
 	self.callback("IsCompleted")
