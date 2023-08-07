@@ -989,7 +989,7 @@ func (self *overallLuck) setProgress() {
 	luck := self.list.Luck()
 
 	self.luck.SetFraction(luck)
-	self.luck.SetText(fmt.Sprintf("%.01f%%", luck*100))
+	self.luck.SetText(fmt.Sprintf("%.03f%%", luck*100-50))
 	self.luck.SetShowText(true)
 	self.luck.SetHExpand(true)
 
