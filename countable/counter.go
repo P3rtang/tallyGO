@@ -72,13 +72,16 @@ func (self *Counter) GetOdds() (odds float64) {
 	case NewOdds:
 		odds = 4096
 	case SOS:
-		var totalRolls int
-		for _, chain := range self.Phases {
-			totalRolls += chain.Progress.GetRolls()
-		}
-		odds = 1 / (1 - math.Pow((1-1/float64(4096)), float64(totalRolls)/float64(self.GetCount())))
+		odds = 4096
 	}
 
+	return
+}
+
+func (self *Counter) GetRolls() (rolls int) {
+	for _, phase := range self.Phases {
+		rolls += phase.GetRolls()
+	}
 	return
 }
 
@@ -96,7 +99,7 @@ func (self *Counter) SetCount(num int) {
 
 func (self *Counter) IncreaseBy(add int) {
 	self.Phases[len(self.Phases)-1].IncreaseBy(add)
-	self.UpdateProgress()
+	self.GetProgress()
 }
 
 func (self *Counter) GetTime() (time time.Duration) {
@@ -117,20 +120,22 @@ func (self *Counter) AddTime(time time.Duration) {
 
 func (self *Counter) GetProgress() (progress float64) {
 	averageOdds := self.GetOdds()
-	count := self.GetCount()
-
-	var deviation float64
+	rolls := self.GetRolls()
 
 	for i := 0; i < len(self.Phases); i++ {
 		var nChooseK big.Int
-		nChooseK.Binomial(int64(count), int64(i))
+		nChooseK.Binomial(int64(rolls), int64(i))
 
-		deviation += float64(nChooseK.Int64()) *
+		progress += float64(nChooseK.Int64()) *
 			math.Pow((1/averageOdds), float64(i)) *
-			math.Pow(1-1/averageOdds, float64(count))
+			math.Pow(1-1/averageOdds, float64(rolls))
 	}
 
-	return deviation
+	for _, phase := range self.Phases {
+		phase.GetProgress()
+	}
+
+	return
 }
 
 func (self *Counter) GetProgressType() ProgressType {
@@ -139,12 +144,10 @@ func (self *Counter) GetProgressType() ProgressType {
 
 func (self *Counter) SetProgressType(type_ ProgressType) {
 	self.ProgressType = type_
-}
-
-func (self *Counter) UpdateProgress() {
-	for _, phase := range self.Phases {
-		phase.UpdateProgress()
+	for _, p := range self.Phases {
+		p.SetProgressType(type_)
 	}
+	self.GetProgress()
 }
 
 func (self *Counter) HasCharm() bool {
@@ -160,6 +163,7 @@ func (self *Counter) SetCharm(hasCharm bool) {
 	for _, p := range self.Phases {
 		p.SetCharm(hasCharm)
 	}
+	self.GetProgress()
 }
 
 func (self *Counter) IsCompleted() (isCompleted bool) {
@@ -175,7 +179,6 @@ func (self *Counter) SetCompleted(isCompleted bool) {
 	for _, p := range self.Phases {
 		p.SetCompleted(true)
 	}
-	self.callback("IsCompleted")
 }
 
 func (self *Counter) Deviation() (deviation float64) {

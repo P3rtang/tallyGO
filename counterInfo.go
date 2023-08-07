@@ -670,11 +670,11 @@ func (self *mainProgressBar) setCounter(countable Countable) {
 		return
 	}
 	self.countable = countable
-	self.countable.ConnectChanged("Count", self.UpdateCount)
-	self.UpdateCount()
+	self.countable.ConnectChanged("Count", self.Update)
+	self.Update()
 }
 
-func (self *mainProgressBar) UpdateCount() {
+func (self *mainProgressBar) Update() {
 	if self.countable.IsNil() {
 		return
 	}
@@ -1013,11 +1013,7 @@ func (self *overallLuck) setCounter(countable Countable) {
 	if countable.IsNil() {
 		return
 	}
-	countable.ConnectChanged("Count", func() {
-		self.setProgress()
-	})
-
-	countable.ConnectChanged("IsCompleted", func() {
+	countable.ConnectChanged("Progress", func() {
 		self.setProgress()
 	})
 }

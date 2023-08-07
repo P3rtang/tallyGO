@@ -34,6 +34,10 @@ func (self *Phase) SetName(name string) {
 	self.callback("Name")
 }
 
+func (self *Phase) GetRolls() int {
+	return self.Progress.GetRolls()
+}
+
 func (self *Phase) GetCount() int {
 	return self.Count
 }
@@ -79,10 +83,12 @@ func (self *Phase) SetProgressType(type_ ProgressType) {
 	default:
 		self.Progress = NewDefaultOdds(8192, self.Count, false)
 	}
+	self.UpdateProgress()
 }
 
 func (self *Phase) GetProgress() float64 {
-	return self.Progress.GetProgress()
+	pr := self.Progress.GetProgress()
+	return pr
 }
 
 func (self *Phase) GetProgressType() ProgressType {
@@ -99,6 +105,7 @@ func (self *Phase) HasCharm() bool {
 
 func (self *Phase) SetCharm(hasCharm bool) {
 	self.Progress.SetCharm(hasCharm)
+	self.UpdateProgress()
 }
 
 func (self *Phase) SetCompleted(isCompleted bool) {

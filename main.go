@@ -703,7 +703,7 @@ func NewEditDialog(countable Countable) *EditDialog {
 		this.NewRow("Name", counter.Name)
 		this.NewRow("Count", counter.GetCount())
 		this.NewRow("HuntType", fmt.Sprint(counter.ProgressType))
-		this.NewRow("Shiny Charm", false)
+		this.NewRow("Shiny Charm", counter.HasCharm())
 		this.AddButton("cancel", func() {
 			this.Close()
 		})

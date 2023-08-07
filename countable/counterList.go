@@ -50,9 +50,9 @@ func (self *CounterList) Completed() (completed int) {
 
 func (self *CounterList) AverageOdds() (odds float64) {
 	for _, c := range self.List {
-		odds += c.GetOdds() * float64(c.GetCount())
+		odds += c.GetOdds() * float64(c.GetRolls())
 	}
-	return odds / float64(self.TotalCount())
+	return odds / float64(self.TotalRolls())
 }
 
 func (self *CounterList) TotalCount() (count int) {
@@ -62,9 +62,16 @@ func (self *CounterList) TotalCount() (count int) {
 	return
 }
 
+func (self *CounterList) TotalRolls() (rolls int) {
+	for _, c := range self.List {
+		rolls += c.GetRolls()
+	}
+	return
+}
+
 func (self *CounterList) Luck() float64 {
 	averageOdds := self.AverageOdds()
-	count := self.TotalCount()
+	count := self.TotalRolls()
 	completed := self.Completed()
 
 	var deviation float64
