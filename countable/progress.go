@@ -8,6 +8,7 @@ import (
 
 type Progress interface {
 	SetRollsFromCount(count int)
+	Charm() bool
 	SetCharm(hasCharm bool)
 	GetProgress() float64
 	GetRolls() int
@@ -35,6 +36,10 @@ func (self *DefaultOdds) SetRollsFromCount(count int) {
 	}
 	self.Rolls = count
 	self.GetProgress()
+}
+
+func (self *DefaultOdds) Charm() bool {
+	return self.HasCharm
 }
 
 func (self *DefaultOdds) SetCharm(hasCharm bool) {
@@ -106,6 +111,10 @@ func (self *SOSBattle) SetRollsFromCount(count int) {
 	}
 
 	self.GetProgress()
+}
+
+func (self *SOSBattle) Charm() bool {
+	return self.HasCharm
 }
 
 func (self *SOSBattle) SetCharm(hasCharm bool) {

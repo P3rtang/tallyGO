@@ -703,6 +703,7 @@ func NewEditDialog(countable Countable) *EditDialog {
 		this.NewRow("Name", counter.Name)
 		this.NewRow("Count", counter.GetCount())
 		this.NewRow("HuntType", fmt.Sprint(counter.ProgressType))
+		this.NewRow("Shiny Charm", false)
 		this.AddButton("cancel", func() {
 			this.Close()
 		})
@@ -716,6 +717,9 @@ func NewEditDialog(countable Countable) *EditDialog {
 			if type_str, ok := this.rows["HuntType"].(string); ok {
 				type_, _ := strconv.Atoi(type_str)
 				counter.SetProgressType(ProgressType(type_))
+			}
+			if hasCharm, ok := this.rows["Shiny Charm"].(bool); ok {
+				counter.SetCharm(hasCharm)
 			}
 			this.Close()
 		})
@@ -751,6 +755,13 @@ func (self *EditDialog) NewRow(title string, value interface{}) {
 			dur := time.Hour.Nanoseconds()*row.hours.Int() + time.Minute.Nanoseconds()*row.mins.Int()
 			self.rows[title] = time.Duration(dur)
 		})
+	case bool:
+		row := NewDialogBoolRow(title, value.(bool))
+		self.list.Append(row)
+
+		row.ConnectChanged(func() {
+			self.rows[title] = row.state.Active()
+		})
 	}
 }
 
@@ -758,6 +769,35 @@ func (self *EditDialog) AddButton(name string, clickCallback func()) {
 	button := gtk.NewButtonWithLabel(name)
 	button.ConnectClicked(clickCallback)
 	self.buttonRow.Append(button)
+}
+
+type DialogBoolRow struct {
+	*gtk.Box
+	state *gtk.CheckButton
+}
+
+func NewDialogBoolRow(title string, value bool) (self *DialogBoolRow) {
+	self = &DialogBoolRow{
+		Box:   gtk.NewBox(gtk.OrientationHorizontal, 0),
+		state: nil,
+	}
+	self.Box.AddCSSClass("editDialogRow")
+
+	titleLabel := gtk.NewLabel(title)
+	titleLabel.SetHExpand(true)
+	titleLabel.SetHAlign(gtk.AlignStart)
+	self.Append(titleLabel)
+
+	switchButton := gtk.NewCheckButton()
+	switchButton.SetActive(value)
+	self.Append(switchButton)
+	self.state = switchButton
+
+	return
+}
+
+func (self *DialogBoolRow) ConnectChanged(callback func()) {
+	self.state.ConnectToggled(callback)
 }
 
 type DialogTimeRow struct {
