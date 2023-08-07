@@ -697,7 +697,7 @@ func (self *mainProgressBar) UpdateCount() {
 	}
 
 	switch {
-	case fraction < .4:
+	case fraction < .5:
 		self.progressBar.AddCSSClass("progressGreen")
 		break
 	case self.countable.GetCount() < odds && odds != 0:
