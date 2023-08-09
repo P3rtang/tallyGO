@@ -2,6 +2,7 @@ package input
 
 import (
 	"container/list"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -22,7 +23,7 @@ type DevInput struct {
 	callbackList map[callBackKeyType]func()
 
 	isRunning bool
-	file      *evdev.InputDevice
+	file      string
 }
 
 func NewDevInput() DevInput {
@@ -30,7 +31,7 @@ func NewDevInput() DevInput {
 		list.New(),
 		make(map[callBackKeyType]func()),
 		true,
-		nil,
+		"",
 	}
 }
 
@@ -51,9 +52,8 @@ func (self *DevInput) HasEvent() bool {
 	return self.eventStream.Len() > 0
 }
 
-func (self *DevInput) ChangeFile(file string) (err error) {
-	self.file, err = evdev.Open("/dev/input/by-id/" + file)
-	return
+func (self *DevInput) ChangeFile(file string) {
+	self.file = "/dev/input/by-id/" + file
 }
 
 func (self *DevInput) fileInit() {
@@ -65,35 +65,39 @@ func (self *DevInput) fileInit() {
 			go self.readEvent(hasEvent)
 			go func() {
 				time.Sleep(time.Millisecond * 200)
-				timedOut <- true
 			}()
 
 			select {
-			case <-hasEvent:
 			case <-timedOut:
+			case <-hasEvent:
 			}
 		}
 	}()
 }
 
 func (self *DevInput) readEvent(hasEvent chan bool) {
-	if self.file == nil {
-		return
-	}
-	events, _ := self.file.Read()
-	for _, event := range events {
-		if event.Type != 1 {
-			continue
+	if device, err := evdev.Open(self.file); err == nil {
+		events, _ := device.Read()
+		if len(events) == 0 {
+			hasEvent <- false
 		}
-		ev := fromEvdev(event)
-		ev.Level = DevInputEvent
-		self.eventStream.PushBack(ev)
+		for _, event := range events {
+			if event.Type != 1 {
+				continue
+			}
+			ev := fromEvdev(event)
+			ev.Level = DevInputEvent
+			self.eventStream.PushBack(ev)
+		}
+		hasEvent <- true
+	} else {
+		log.Println("[WARN] Could not open device file, Got Error: ", err)
+		hasEvent <- false
 	}
-	hasEvent <- true
 }
 
 func (self *DevInput) Init(file string) (err error) {
-	err = self.ChangeFile(file)
+	self.ChangeFile(file)
 	go func() {
 		for self.isRunning {
 			event := self.NextEvent()

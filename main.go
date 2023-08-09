@@ -160,7 +160,7 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 		log.Println("[WARN] Could not initialize keyboard. Got Error: ", err)
 	}
 	self.settings.ConnectChanged(settings.ActiveKeyboard, func(value interface{}) {
-		err := inputHandler.ChangeFile(value.(string))
+		inputHandler.ChangeFile(value.(string))
 		if err != nil {
 			log.Println("[WARN] Could not initialize keyboard. Got Error: ", err)
 		}
