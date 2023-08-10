@@ -1,6 +1,6 @@
 module tallyGo
 
-go 1.20
+go 1.21
 
 require github.com/diamondburned/gotk4/pkg v0.0.5
 
