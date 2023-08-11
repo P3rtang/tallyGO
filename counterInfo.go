@@ -60,7 +60,7 @@ func NewInfoBox(counter *Counter, counterList *CounterList) (self *infoBox) {
 	self.AddCSSClass("infoBox")
 	self.SetVExpand(true)
 
-	APP.ActiveWindow().NotifyProperty("default-height", self.handleResize)
+	APP.ActiveWindow().NotifyProperty("default-width", self.handleResize)
 
 	self.isExpanded = true
 	self.Append(self.widgetRevealer)
@@ -79,6 +79,10 @@ func (self *infoBox) getWidgetSlice() (list []infoBoxWidget) {
 		list = append(list, widget)
 	}
 	return
+}
+
+func (self *infoBox) Width() int {
+	return self.Parent().(*gtk.Viewport).Width()
 }
 
 func (self *infoBox) handleResize() {
