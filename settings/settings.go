@@ -177,7 +177,11 @@ type KeyboardChooser struct {
 }
 
 func NewKeyboardChooser(settings *Settings) *KeyboardChooser {
-	value := settings.GetValue(ActiveKeyboard).(string)
+	var value string
+	var ok bool
+	if value, ok = settings.GetValue(ActiveKeyboard).(string); !ok {
+		value = input.GetKbdList()[0]
+	}
 
 	store := gio.NewListStore(glib.TypeObject)
 	factory := gtk.NewSignalListItemFactory()
