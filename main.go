@@ -935,6 +935,7 @@ func (self *SaveFileHandler) Save() (err error) {
 func (self *SaveFileHandler) Restore() (err error) {
 	var saveData []byte
 	if saveData, err = os.ReadFile(self.filePath); err != nil {
+		log.Fatal("[FATAL] Could not Read save file, Got Error: ", err)
 		return
 	}
 
