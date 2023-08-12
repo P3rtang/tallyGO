@@ -4,3 +4,4 @@ Type=Application
 Terminal=false
 Exec=tallyGo
 Name=tallyGo
+Icon=~/.local/share/tallyGo/tallyGo.svg
