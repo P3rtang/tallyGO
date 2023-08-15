@@ -294,7 +294,6 @@ func newCounterTreeView(cList *CounterList, homeWindow *HomeApplicationWindow) (
 	self.selection = ssel
 
 	factory := gtk.NewSignalListItemFactory()
-	factory.ConnectSetup(createRow)
 	factory.ConnectBind(bindRow)
 	tv.SetFactory(&factory.ListItemFactory)
 
@@ -562,7 +561,9 @@ func (self *TreeRowContextMenu) ConnectRowClick(rowName string, f func()) {
 	gesture := gtk.NewGestureClick()
 	gesture.ConnectPressed(func(int, float64, float64) {
 		self.Unmap()
-		f()
+		glib.IdleAdd(func() {
+			f()
+		})
 	})
 	self.rows[rowName].AddController(gesture)
 }

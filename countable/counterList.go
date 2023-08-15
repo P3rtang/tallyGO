@@ -1,8 +1,9 @@
 package countable
 
 import (
-	"math"
-	"math/big"
+	"fmt"
+
+	"gonum.org/v1/gonum/stat/distuv"
 )
 
 type CounterList struct {
@@ -71,19 +72,16 @@ func (self *CounterList) TotalRolls() (rolls int) {
 
 func (self *CounterList) Luck() float64 {
 	averageOdds := self.AverageOdds()
-	count := self.TotalRolls()
+	rolls := self.TotalRolls()
 	completed := self.Completed()
 
-	var deviation float64
+	fmt.Println(averageOdds, rolls, completed)
 
-	for i := 0; i < completed; i++ {
-		var nChooseK big.Int
-		nChooseK.Binomial(int64(count), int64(i))
-
-		deviation += float64(nChooseK.Int64()) *
-			math.Pow((1/averageOdds), float64(i)) *
-			math.Pow(1-1/averageOdds, float64(count))
+	binomial := distuv.Binomial{
+		N:   float64(rolls),
+		P:   1 / averageOdds,
+		Src: nil,
 	}
 
-	return deviation
+	return binomial.CDF(float64(completed - 1))
 }
