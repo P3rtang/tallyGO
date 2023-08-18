@@ -3,8 +3,10 @@ package countable
 import (
 	"fmt"
 	"math"
-	"math/big"
+	EventBus "tallyGo/eventBus"
 	"time"
+
+	"gonum.org/v1/gonum/stat/distuv"
 )
 
 type Counter struct {
@@ -21,26 +23,13 @@ func NewCounter(name string, _ int, progressType ProgressType) (counter *Counter
 	return
 }
 
-func (self *Counter) ConnectChanged(field string, f func()) {
-	if self.callbackChange == nil {
-		self.callbackChange = map[string][]func(){}
-	}
-	if field == "Name" {
-		self.callbackChange[field] = append(self.callbackChange[field], f)
-	} else {
-		for _, phase := range self.Phases {
-			phase.ConnectChanged(field, f)
-		}
-	}
-}
-
 func (self *Counter) GetName() (name string) {
 	return self.Name
 }
 
 func (self *Counter) SetName(name string) {
 	self.Name = name
-	self.callback("Name")
+	EventBus.GetGlobalBus().SendSignal(NameChanged, self.Name)
 }
 
 func (self *Counter) NewPhase(progressType ProgressType) *Phase {
@@ -51,7 +40,6 @@ func (self *Counter) NewPhase(progressType ProgressType) *Phase {
 		time.Duration(0),
 		nil,
 		false,
-		map[string][]func(){},
 	}
 
 	newPhase.SetProgressType(progressType)
@@ -121,21 +109,26 @@ func (self *Counter) AddTime(time time.Duration) {
 func (self *Counter) GetProgress() (progress float64) {
 	averageOdds := self.GetOdds()
 	rolls := self.GetRolls()
+	var completed int
 
-	for i := 0; i < len(self.Phases); i++ {
-		var nChooseK big.Int
-		nChooseK.Binomial(int64(rolls), int64(i))
-
-		progress += float64(nChooseK.Int64()) *
-			math.Pow((1/averageOdds), float64(i)) *
-			math.Pow(1-1/averageOdds, float64(rolls))
+	switch self.ProgressType {
+	case SOS:
+		completed = 1
+	default:
+		completed = len(self.Phases)
 	}
 
 	for _, phase := range self.Phases {
 		phase.GetProgress()
 	}
 
-	return
+	binomial := distuv.Binomial{
+		N:   float64(rolls),
+		P:   1 / averageOdds,
+		Src: nil,
+	}
+
+	return binomial.CDF(float64(completed - 1))
 }
 
 func (self *Counter) GetProgressType() ProgressType {
@@ -186,18 +179,6 @@ func (self *Counter) Deviation() (deviation float64) {
 		deviation += (float64(p.GetCount()) / self.GetOdds())
 	}
 	return
-}
-
-func (self *Counter) callback(field string) {
-	if field == "Name" {
-		for _, f := range self.callbackChange[field] {
-			f()
-		}
-	} else {
-		for _, p := range self.Phases {
-			p.callback(field)
-		}
-	}
 }
 
 func (self *Counter) IsNil() bool {

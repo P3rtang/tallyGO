@@ -1,6 +1,9 @@
 package countable
 
-import "time"
+import (
+	EventBus "tallyGo/eventBus"
+	"time"
+)
 
 type Countable interface {
 	GetName() (name string)
@@ -10,20 +13,25 @@ type Countable interface {
 	SetCount(num int)
 	IncreaseBy(add int)
 
-	AddTime(time.Duration)
-	SetTime(time.Duration)
 	GetTime() time.Duration
+	SetTime(time.Duration)
+	AddTime(time.Duration)
 
-	GetProgress() float64
-	GetProgressType() ProgressType
 	HasCharm() bool
 	SetCharm(bool)
 
-	ConnectChanged(field string, f func())
-	callback(field string)
+	GetProgress() float64
+	GetProgressType() ProgressType
 
 	IsNil() bool
 }
+
+const (
+	NameChanged     EventBus.Signal = "NameChanged"
+	CountChanged                    = "CountChanged"
+	TimeChanged                     = "TimeChanged"
+	CompletedStatus                 = "CompletedStatus"
+)
 
 type ProgressType int
 
@@ -70,8 +78,3 @@ const (
 	Count callBackType = iota
 	Time
 )
-
-type CounterElement interface {
-	SetCompleted(set bool)
-	ConnectChanged(field string, callback func())
-}

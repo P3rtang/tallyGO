@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	EventBus "tallyGo/eventBus"
 	"time"
 )
 
@@ -14,15 +15,6 @@ type Phase struct {
 	Progress Progress
 
 	IsCompleted bool
-
-	callbackChange map[string][]func()
-}
-
-func (self *Phase) ConnectChanged(field string, f func()) {
-	if self.callbackChange == nil {
-		self.callbackChange = map[string][]func(){}
-	}
-	self.callbackChange[field] = append(self.callbackChange[field], f)
 }
 
 func (self *Phase) GetName() (name string) {
@@ -31,7 +23,7 @@ func (self *Phase) GetName() (name string) {
 
 func (self *Phase) SetName(name string) {
 	self.Name = name
-	self.callback("Name")
+	EventBus.GetGlobalBus().SendSignal(NameChanged, self.Name)
 }
 
 func (self *Phase) GetRolls() int {
@@ -45,7 +37,7 @@ func (self *Phase) GetCount() int {
 func (self *Phase) SetCount(num int) {
 	self.Count = num
 	self.UpdateProgress()
-	self.callback("Count")
+	EventBus.GetGlobalBus().SendSignal(CountChanged, self.Count)
 }
 
 func (self *Phase) IncreaseBy(add int) {
@@ -54,7 +46,7 @@ func (self *Phase) IncreaseBy(add int) {
 	}
 	self.Count += add
 	self.UpdateProgress()
-	self.callback("Count")
+	EventBus.GetGlobalBus().SendSignal(CountChanged, self.Count)
 }
 
 func (self *Phase) GetTime() time.Duration {
@@ -63,7 +55,7 @@ func (self *Phase) GetTime() time.Duration {
 
 func (self *Phase) SetTime(time time.Duration) {
 	self.Time = time
-	self.callback("Time")
+	EventBus.GetGlobalBus().SendSignal(TimeChanged, self.Time)
 }
 
 func (self *Phase) AddTime(time time.Duration) {
@@ -71,7 +63,7 @@ func (self *Phase) AddTime(time time.Duration) {
 		return
 	}
 	self.Time += time
-	self.callback("Time")
+	EventBus.GetGlobalBus().SendSignal(TimeChanged, self.Time)
 }
 
 func (self *Phase) SetProgressType(type_ ProgressType) {
@@ -110,13 +102,6 @@ func (self *Phase) SetCharm(hasCharm bool) {
 
 func (self *Phase) SetCompleted(isCompleted bool) {
 	self.IsCompleted = isCompleted
-	self.callback("IsCompleted")
-}
-
-func (self *Phase) callback(field string) {
-	for _, f := range self.callbackChange[field] {
-		f()
-	}
 }
 
 func (self *Phase) IsNil() bool {

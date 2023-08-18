@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strconv"
 	. "tallyGo/countable"
+	EventBus "tallyGo/eventBus"
 	"tallyGo/input"
 	"tallyGo/settings"
 	"time"
@@ -36,6 +37,8 @@ var HOME *HomeApplicationWindow
 func main() {
 	APP = gtk.NewApplication("com.github.p3rtang.counter", gio.ApplicationFlagsNone)
 	APP.ConnectActivate(func() { activate(APP) })
+
+	EventBus.InitBus()
 
 	if code := APP.Run(os.Args); code > 0 {
 		os.Exit(code)
@@ -82,6 +85,8 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 	}
 
 	HOME = self
+	eventBus := EventBus.GetGlobalBus()
+
 	self.SetTitle("tallyGo")
 
 	savePath, _ := os.UserHomeDir()
@@ -101,6 +106,7 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 	})
 
 	counterTV := newCounterTreeView(counters, self)
+
 	scrollView := gtk.NewScrolledWindow()
 	scrollView.SetChild(counterTV)
 	scrollView.SetName("treeViewScrollWindow")
@@ -147,7 +153,7 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 		self.setCSSTheme(css)
 	})
 
-	self.infoBox = NewInfoBox(nil, counters)
+	self.infoBox = NewInfoBox(counters)
 	infoBoxScroll := gtk.NewScrolledWindow()
 	infoBoxScroll.SetChild(self.infoBox)
 
@@ -169,56 +175,70 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 	eventController := gtk.NewEventControllerKey()
 	self.Window.AddController(eventController)
 	eventController.ConnectKeyReleased(func(keyval uint, _ uint, _ gdk.ModifierType) {
-		key := input.KeyType(uint16(keyval))
-		inputHandler.SimulateKey(key, 1)
+		var key input.KeyType
+		switch keyval {
+		case 112:
+			key = input.KeyP
+		}
+		inputHandler.SimulateKey(key, input.SimKeyReleased)
 	})
 
 	go func() {
 		for {
 			startInstant := time.Now()
 			time.Sleep(FRAME_TIME)
-			if self.isTimingActive && !self.infoBox.countable.IsNil() {
+			if self.isTimingActive && counters.HasActive() {
 				glib.IdleAdd(func() {
-					self.infoBox.countable.AddTime(time.Now().Sub(startInstant))
+					for _, countable := range counters.GetActive() {
+						countable.AddTime(time.Now().Sub(startInstant))
+					}
 				})
 			}
 		}
 	}()
 
-	inputHandler.ConnectKey(input.KeyEqual, input.KeyReleased, input.DevInputEvent, func() {
-		if !self.isTimingActive {
-			return
+	eventBus.Subscribe(input.DevKeyReleased, func(args ...interface{}) {
+		key := args[0].(input.KeyType)
+
+		switch {
+		case key == input.KeyEqual || key == input.KeyKeypadPlus:
+			if !self.isTimingActive {
+				return
+			}
+			glib.IdleAdd(func() {
+				for _, countable := range counters.GetActive() {
+					countable.IncreaseBy(1)
+				}
+			})
+			saveDataHandler.Save()
+
+		case key == input.KeyMinus || key == input.KeyKeypadMinus:
+			if !self.isTimingActive {
+				return
+			}
+			glib.IdleAdd(func() {
+				for _, countable := range counters.GetActive() {
+					countable.IncreaseBy(-1)
+				}
+			})
+			saveDataHandler.Save()
+
+		case key == input.KeyQ:
+			self.isTimingActive = false
+
 		}
-		self.infoBox.countable.IncreaseBy(1)
-		saveDataHandler.Save()
 	})
-	inputHandler.ConnectKey(input.KeyKeypadPlus, input.KeyReleased, input.DevInputEvent, func() {
-		if !self.isTimingActive {
-			return
+
+	eventBus.Subscribe(input.SimKeyReleased, func(args ...interface{}) {
+		key := args[0].(input.KeyType)
+
+		switch {
+		case key == input.KeyP:
+			self.isTimingActive = !self.isTimingActive
 		}
-		self.infoBox.countable.IncreaseBy(1)
-		saveDataHandler.Save()
 	})
-	inputHandler.ConnectKey(input.KeyMinus, input.KeyReleased, input.DevInputEvent, func() {
-		if !self.isTimingActive {
-			return
-		}
-		self.infoBox.countable.IncreaseBy(-1)
-		saveDataHandler.Save()
-	})
-	inputHandler.ConnectKey(input.KeyKeypadMinus, input.KeyReleased, input.DevInputEvent, func() {
-		if !self.isTimingActive {
-			return
-		}
-		self.infoBox.countable.IncreaseBy(-1)
-		saveDataHandler.Save()
-	})
-	inputHandler.ConnectKey(112, input.KeyReleased, input.WindowEvent, func() {
-		self.isTimingActive = !self.isTimingActive
-	})
-	inputHandler.ConnectKey(input.KeyQ, input.KeyReleased, input.DevInputEvent, func() {
-		self.isTimingActive = false
-	})
+	counterTV.CollapseAll()
+
 	return
 }
 
@@ -294,7 +314,7 @@ func newCounterTreeView(cList *CounterList, homeWindow *HomeApplicationWindow) (
 	self.selection = ssel
 
 	factory := gtk.NewSignalListItemFactory()
-	factory.ConnectBind(bindRow)
+	factory.ConnectBind(self.bindRow)
 	tv.SetFactory(&factory.ListItemFactory)
 
 	ssel.SetAutoselect(false)
@@ -315,6 +335,14 @@ func newCounterTreeView(cList *CounterList, homeWindow *HomeApplicationWindow) (
 	}
 
 	return
+}
+
+func (self *CounterTreeView) CollapseAll() {
+	for _, exp := range self.expanders {
+		if row := exp.ListRow(); row != nil {
+			row.SetExpanded(false)
+		}
+	}
 }
 
 func (self *CounterTreeView) addCounter(counter *Counter, cList *CounterList) {
@@ -353,6 +381,8 @@ func (self *CounterTreeView) addCounter(counter *Counter, cList *CounterList) {
 
 func (self *CounterTreeView) newSelection(position uint, nItems uint) {
 	row := self.selection.Item(self.selection.Selected()).Cast().(*gtk.TreeListRow)
+	self.homeWindow.isTimingActive = false
+
 	var phaseNum uint
 	var counter *Counter
 	switch row.Depth() {
@@ -360,14 +390,14 @@ func (self *CounterTreeView) newSelection(position uint, nItems uint) {
 		// exp := row.Item().Cast().(*gtk.TreeExpander)
 		counter = getCounterExpander(row.Item(), self.expanders).counter
 		phaseNum = uint(len(counter.Phases))
-		self.homeWindow.infoBox.SetCounter(counter)
+		self.homeWindow.infoBox.counterList.SetActive(counter)
 	case 1:
 		parentRow := row.Parent()
 		// exp := parentRow.Item().Cast().(*gtk.TreeExpander)
 		counter = getCounterExpander(parentRow.Item(), self.expanders).counter
 		phaseNum = row.Position() - parentRow.Position()
 		phase := counter.Phases[phaseNum-1]
-		self.homeWindow.infoBox.SetCounter(phase)
+		self.homeWindow.infoBox.counterList.SetActive(phase)
 	}
 }
 
@@ -382,20 +412,17 @@ func (self *CounterTreeView) createTreeModel(gObj *glib.Object) *gio.ListModel {
 	return &store.ListModel
 }
 
-func createRow(listItem *gtk.ListItem) {
-	label := gtk.NewLabel("")
-	listItem.SetChild(label)
-}
-
-func bindRow(listItem *gtk.ListItem) {
+func (self *CounterTreeView) bindRow(listItem *gtk.ListItem) {
 	row := listItem.Item().Cast().(*gtk.TreeListRow)
 	switch row.Item().Type().Name() {
 	case "GtkTreeExpander":
+		for _, exp := range self.expanders {
+			if exp.Object.Eq(row.Item()) {
+				exp.SetListRow(row)
+				listItem.SetChild(exp)
+			}
+		}
 
-		expander := row.Item().Cast().(*gtk.TreeExpander)
-
-		expander.SetListRow(row)
-		listItem.SetChild(expander)
 		break
 	case "GtkLabel":
 		label := row.Item().Cast().(*gtk.Label)
@@ -507,7 +534,7 @@ func newCounterExpander(counter *Counter) (self *CounterExpander) {
 	}
 
 	self = &CounterExpander{expander, counter, store, contextMenu}
-	counter.ConnectChanged("Name", func() {
+	EventBus.GetGlobalBus().Subscribe(NameChanged, func(args ...interface{}) {
 		label.SetText(counter.Name)
 	})
 
@@ -594,7 +621,7 @@ func newPhaseRow(phase *Phase) (self *PhaseRow) {
 	label := gtk.NewLabel(phase.Name)
 	label.SetHAlign(gtk.AlignStart)
 
-	phase.ConnectChanged("Name", func() {
+	EventBus.GetGlobalBus().Subscribe(NameChanged, func(args ...interface{}) {
 		label.SetText(phase.Name)
 	})
 
@@ -627,7 +654,7 @@ func newPhaseRow(phase *Phase) (self *PhaseRow) {
 		phase.SetCompleted(!phase.IsCompleted)
 	})
 
-	phase.ConnectChanged("IsCompleted", func() {
+	EventBus.GetGlobalBus().Subscribe(CompletedStatus, func(...interface{}) {
 		self.UpdateLock()
 	})
 

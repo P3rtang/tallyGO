@@ -1,17 +1,39 @@
 package countable
 
 import (
-	"fmt"
+	EventBus "tallyGo/eventBus"
 
 	"gonum.org/v1/gonum/stat/distuv"
 )
 
+const (
+	ListActiveChanged EventBus.Signal = "ListActiveChanged"
+)
+
 type CounterList struct {
-	List []*Counter
+	List   []*Counter
+	active []Countable
 }
 
 func NewCounterList(list []*Counter) *CounterList {
-	return &CounterList{list}
+	return &CounterList{list, nil}
+}
+
+func (self *CounterList) GetActive() []Countable {
+	return self.active
+}
+
+func (self *CounterList) HasActive() bool {
+	return len(self.active) > 0
+}
+
+func (self *CounterList) SetActive(countables ...Countable) {
+	self.active = countables
+	data := []interface{}{}
+	for _, c := range self.active {
+		data = append(data, c)
+	}
+	EventBus.GetGlobalBus().SendSignal(ListActiveChanged, data...)
 }
 
 func (self *CounterList) Remove(counter *Counter) {
@@ -44,7 +66,12 @@ func (self *CounterList) Deviation() (deviation float64) {
 
 func (self *CounterList) Completed() (completed int) {
 	for _, c := range self.List {
-		completed += len(c.Phases)
+		switch c.GetProgressType() {
+		case SOS:
+			completed += 1
+		default:
+			completed += len(c.Phases)
+		}
 	}
 	return
 }
@@ -74,8 +101,6 @@ func (self *CounterList) Luck() float64 {
 	averageOdds := self.AverageOdds()
 	rolls := self.TotalRolls()
 	completed := self.Completed()
-
-	fmt.Println(averageOdds, rolls, completed)
 
 	binomial := distuv.Binomial{
 		N:   float64(rolls),

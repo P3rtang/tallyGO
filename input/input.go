@@ -1,14 +1,20 @@
 package input
 
 import (
-	"container/list"
 	"log"
 	"os"
 	"strings"
+	EventBus "tallyGo/eventBus"
 	"time"
 
-	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	evdev "github.com/gvalkov/golang-evdev"
+)
+
+const (
+	DevKeyPressed  EventBus.Signal = "DevKeyPressed"
+	DevKeyReleased                    = "DevKeyReleased"
+	SimKeyPressed                     = "SimKeyPressed"
+	SimKeyReleased                    = "SimKeyReleased"
 )
 
 type InputHandler interface {
@@ -19,37 +25,15 @@ type InputHandler interface {
 }
 
 type DevInput struct {
-	eventStream  *list.List
-	callbackList map[callBackKeyType]func()
-
 	isRunning bool
 	file      string
 }
 
 func NewDevInput() DevInput {
 	return DevInput{
-		list.New(),
-		make(map[callBackKeyType]func()),
 		true,
 		"",
 	}
-}
-
-func (self *DevInput) NextEvent() *Event {
-	front := self.eventStream.Front()
-	if front == nil {
-		return nil
-	}
-
-	self.eventStream.Remove(front)
-	if event, isEvent := front.Value.(Event); isEvent {
-		return &event
-	}
-	return nil
-}
-
-func (self *DevInput) HasEvent() bool {
-	return self.eventStream.Len() > 0
 }
 
 func (self *DevInput) ChangeFile(file string) {
@@ -87,7 +71,7 @@ func (self *DevInput) readEvent(hasEvent chan bool) {
 			}
 			ev := fromEvdev(event)
 			ev.Level = DevInputEvent
-			self.eventStream.PushBack(ev)
+			EventBus.GetGlobalBus().Send(EventBus.NewEvent(ev.Value, ev.Code))
 		}
 		hasEvent <- true
 	} else {
@@ -98,38 +82,14 @@ func (self *DevInput) readEvent(hasEvent chan bool) {
 
 func (self *DevInput) Init(file string) (err error) {
 	self.ChangeFile(file)
-	go func() {
-		for self.isRunning {
-			event := self.NextEvent()
-			if event == nil {
-				time.Sleep(time.Millisecond * 5)
-			} else if callback := self.callbackList[callBackKeyType{event.Code, event.Value, event.Level}]; callback != nil {
-				glib.IdleAdd(func() {
-					callback()
-				})
-			}
-		}
-	}()
 
 	self.fileInit()
 
 	return
 }
 
-func (self *DevInput) ConnectKey(key KeyType, evType EventValue, level CallbackLevel, callback func()) {
-	self.callbackList[callBackKeyType{key, evType, level}] = callback
-}
-
-func (self *DevInput) SimulateKey(key KeyType, evType EventValue) {
-	self.eventStream.PushBack(
-		Event{
-			time.Now().Unix(),
-			1,
-			key,
-			evType,
-			WindowEvent,
-		},
-	)
+func (self *DevInput) SimulateKey(key KeyType, kind EventBus.Signal) {
+	EventBus.GetGlobalBus().Send(EventBus.NewEvent(kind, key))
 }
 
 func GetKbdList() []string {
@@ -149,12 +109,6 @@ func GetKbdList() []string {
 	return files
 }
 
-type callBackKeyType struct {
-	Code  CodeType
-	Value EventValue
-	Level CallbackLevel
-}
-
 type CallbackLevel int
 
 const (
@@ -166,16 +120,23 @@ type Event struct {
 	Time  int64
 	Type  EventType
 	Code  CodeType
-	Value EventValue
+	Value EventBus.Signal
 	Level CallbackLevel
 }
 
 func fromEvdev(ev evdev.InputEvent) (event Event) {
+	var value EventBus.Signal
+	switch ev.Value {
+	case 0:
+		value = DevKeyPressed
+	case 1:
+		value = DevKeyReleased
+	}
 	return Event{
 		ev.Time.Sec,
 		EventType(ev.Type),
 		KeyType(ev.Code),
-		EventValue(ev.Value),
+		value,
 		DevInputEvent,
 	}
 }
@@ -643,6 +604,6 @@ const (
 type EventValue int32
 
 const (
-	KeyPressed EventValue = iota
-	KeyReleased
+	KeyPress EventValue = iota
+	KeyRelease
 )
