@@ -60,7 +60,6 @@ func NewSettingsMenu(settings *Settings) (self *SettingsMenu) {
 	self = &SettingsMenu{gtk.NewBox(gtk.OrientationHorizontal, 0), nil, settings}
 
 	listView := NewSettingsItems()
-	listView.SetSizeRequest(300, -1)
 	listView.selectionModel.ConnectSelectionChanged(func(uint, uint) {
 		self.Box.Remove(self.Box.LastChild())
 		self.Box.Append(listView.selection().menuGrid(settings).grid())

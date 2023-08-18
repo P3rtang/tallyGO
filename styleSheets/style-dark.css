@@ -1,0 +1,39 @@
+@define-color highlight rgba(139, 233, 253, 1);
+
+button {
+    background: #444444;
+}
+
+separator {
+    background: #CCCCCC;
+}
+
+row:selected {
+    background: @highlight;
+    color: black;
+}
+
+.progressGreen progress {
+    background: #50FA7B;
+}
+
+.progressYellow progress {
+    background: #F1FA8C;
+}
+
+.progressOrange progress {
+    background: #FFB86C;
+}
+
+.progressRed progress {
+    background: #FF9580;
+}
+
+.infoBoxShowBackground {
+    background: #444444;
+}
+
+#widget, .selected {
+    background: @highlight;
+    color: black;
+}

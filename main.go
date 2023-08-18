@@ -23,10 +23,13 @@ import (
 const FRAME_TIME = time.Millisecond * 33
 const SAVE_STRATEGY = JSON
 
-//go:embed style.css
+//go:embed styleSheets/style.css
 var CSS_FILE string
 
-//go:embed style-dark.css
+//go:embed styleSheets/style-light.css
+var CSS_LIGHT string
+
+//go:embed styleSheets/style-dark.css
 var CSS_DARK string
 
 var APP *gtk.Application
@@ -147,10 +150,13 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 	css := gtk.NewCSSProvider()
 	gtk.StyleContextAddProviderForDisplay(gdk.DisplayGetDefault(), css, gtk.STYLE_PROVIDER_PRIORITY_SETTINGS)
 	css.LoadFromData(CSS_FILE)
-	self.setCSSTheme(css)
+
+	themeCSS := gtk.NewCSSProvider()
+	gtk.StyleContextAddProviderForDisplay(gdk.DisplayGetDefault(), themeCSS, gtk.STYLE_PROVIDER_PRIORITY_SETTINGS+1)
+	self.setCSSTheme(themeCSS)
 
 	saveDataHandler.SettingsData.ConnectChanged(settings.DarkMode, func(_ any) {
-		self.setCSSTheme(css)
+		self.setCSSTheme(themeCSS)
 	})
 
 	self.infoBox = NewInfoBox(counters)
@@ -251,7 +257,7 @@ func (self *HomeApplicationWindow) setCSSTheme(css *gtk.CSSProvider) {
 		css.LoadFromData(CSS_DARK)
 	} else {
 		gtk.SettingsGetDefault().SetObjectProperty("gtk-theme-name", "Adwaita")
-		css.LoadFromData(CSS_FILE)
+		css.LoadFromData(CSS_LIGHT)
 	}
 }
 
@@ -486,7 +492,6 @@ func newCounterExpander(counter *Counter) (self *CounterExpander) {
 		phase := counter.NewPhase(counter.ProgressType)
 		row := newPhaseRow(phase)
 		row.contextMenu.ConnectRowClick("delete", func() {
-			fmt.Println(self.counter.Phases)
 			for i, p := range self.counter.Phases {
 				if p == phase {
 					self.counter.Phases = append(self.counter.Phases[:i], self.counter.Phases[i+1:]...)
@@ -975,8 +980,13 @@ func (self *SaveFileHandler) Restore() (err error) {
 	}
 
 	if self.SettingsData == nil {
+		log.Printf("[INFO]\t Found no Settings data in savefile, generating default Settings")
 		self.SettingsData = settings.NewSettings()
+	} else {
+		log.Printf("[INFO]\t Found Settings data in savefile, loading Settings")
 	}
+
+	log.Printf("[INFO]\t Loaded %d Counters\n", len(self.CounterData))
 
 	return
 }

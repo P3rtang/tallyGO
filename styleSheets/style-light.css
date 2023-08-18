@@ -1,0 +1,52 @@
+headerbar button {
+    background: #FFFFFF;
+}
+
+button {
+    background: #DDDDDD;
+}
+
+button:hover {
+    background: #CCCCCC;
+}
+
+.progressGreen progress {
+    background: #50FA7B;
+}
+
+.progressYellow progress {
+    background: #F1FA8C;
+}
+
+.progressOrange progress {
+    background: #FFB86C;
+}
+
+.progressRed progress {
+    background: #FF9580;
+}
+
+#treeViewContext row:hover {
+    background: #DDDDDD;
+}
+
+.editDialogRow {
+    background: #DDDDDD;
+}
+
+#infoToggleButton:hover {
+    background: #CCCCCC;
+}
+
+progressbar trough {
+    background: #CCCCCC;
+}
+
+.infoBoxShowBackground {
+    background: #DDDDDD;
+}
+
+#widget, .selected {
+    background: #3584E4;
+    color: white;
+}
