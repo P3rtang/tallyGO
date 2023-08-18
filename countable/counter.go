@@ -187,7 +187,3 @@ func (self *Counter) Deviation() (deviation float64) {
 	}
 	return
 }
-
-func (self *Counter) IsNil() bool {
-	return self == nil
-}

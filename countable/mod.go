@@ -22,8 +22,6 @@ type Countable interface {
 
 	GetProgress() float64
 	GetProgressType() ProgressType
-
-	IsNil() bool
 }
 
 const (

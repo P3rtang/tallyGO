@@ -444,13 +444,13 @@ func newMainCountLabel() (self *countLabel) {
 }
 
 func (self *countLabel) IncreaseBy(add int) {
-	if !self.countable.IsNil() {
+	if self.countable != Countable(nil) {
 		self.countable.IncreaseBy(add)
 	}
 }
 
 func (self *countLabel) setCounter(countable Countable) {
-	if countable == Countable(nil) || countable.IsNil() {
+	if countable == Countable(nil) {
 		return
 	}
 	self.countable = countable
@@ -458,7 +458,7 @@ func (self *countLabel) setCounter(countable Countable) {
 }
 
 func (self *countLabel) UpdateCount(...interface{}) {
-	if self.countable == nil {
+	if self.countable == Countable(nil) {
 		return
 	}
 	self.labelCount.SetText(self.String())
@@ -473,9 +473,9 @@ func (self *countLabel) String() string {
 
 func (self *countLabel) setBorder(setShown bool) {
 	if setShown {
-		self.AddCSSClass("infoBoxShowBorder")
+		self.AddCSSClass("infoBoxShowBackground")
 	} else {
-		self.RemoveCSSClass("infoBoxShowBorder")
+		self.RemoveCSSClass("infoBoxShowBackground")
 	}
 }
 
@@ -559,7 +559,7 @@ func (self *timeLabel) IncreaseBy(add int) {
 }
 
 func (self *timeLabel) setCounter(countable Countable) {
-	if countable.IsNil() {
+	if countable == Countable(nil) {
 		return
 	}
 	self.countable = countable
@@ -567,7 +567,7 @@ func (self *timeLabel) setCounter(countable Countable) {
 }
 
 func (self *timeLabel) UpdateTime(...interface{}) {
-	if self.countable == nil {
+	if self.countable == Countable(nil) {
 		return
 	}
 	self.labelTime.SetText(self.Time())
@@ -603,9 +603,9 @@ func (self *timeLabel) String() string {
 
 func (self *timeLabel) setBorder(setShown bool) {
 	if setShown {
-		self.AddCSSClass("infoBoxShowBorder")
+		self.AddCSSClass("infoBoxShowBackground")
 	} else {
-		self.RemoveCSSClass("infoBoxShowBorder")
+		self.RemoveCSSClass("infoBoxShowBackground")
 	}
 }
 
@@ -684,7 +684,7 @@ func newMainProgressBar() (self *mainProgressBar) {
 }
 
 func (self *mainProgressBar) setCounter(countable Countable) {
-	if countable.IsNil() {
+	if countable == Countable(nil) {
 		return
 	}
 	self.countable = countable
@@ -692,7 +692,7 @@ func (self *mainProgressBar) setCounter(countable Countable) {
 }
 
 func (self *mainProgressBar) Update(...interface{}) {
-	if self.countable.IsNil() {
+	if self.countable == Countable(nil) {
 		return
 	}
 	fraction := 1.0 - self.countable.GetProgress()
@@ -731,9 +731,9 @@ func (self *mainProgressBar) Update(...interface{}) {
 
 func (self *mainProgressBar) setBorder(setShown bool) {
 	if setShown {
-		self.AddCSSClass("infoBoxShowBorder")
+		self.AddCSSClass("infoBoxShowBackground")
 	} else {
-		self.RemoveCSSClass("infoBoxShowBorder")
+		self.RemoveCSSClass("infoBoxShowBackground")
 	}
 }
 
@@ -808,7 +808,7 @@ func newStepTime() (self *stepTime) {
 }
 
 func (self *stepTime) setCounter(countable Countable) {
-	if countable.IsNil() {
+	if countable == Countable(nil) {
 		return
 	}
 	self.countable = countable
@@ -826,9 +826,9 @@ func (self *stepTime) Update(...interface{}) {
 
 func (self *stepTime) setBorder(setShown bool) {
 	if setShown {
-		self.AddCSSClass("infoBoxShowBorder")
+		self.AddCSSClass("infoBoxShowBackground")
 	} else {
-		self.RemoveCSSClass("infoBoxShowBorder")
+		self.RemoveCSSClass("infoBoxShowBackground")
 	}
 }
 
@@ -909,7 +909,7 @@ func newLastStepTime() (self *lastStepTime) {
 
 func (self *lastStepTime) setCounter(countable Countable) {
 	self.countable = countable
-	if self.countable.IsNil() {
+	if self.countable == Countable(nil) {
 		self.lastTime = 0
 		return
 	}
@@ -926,9 +926,9 @@ func (self *lastStepTime) Update(...interface{}) {
 
 func (self *lastStepTime) setBorder(setShown bool) {
 	if setShown {
-		self.Box.AddCSSClass("infoBoxShowBorder")
+		self.Box.AddCSSClass("infoBoxShowBackground")
 	} else {
-		self.Box.RemoveCSSClass("infoBoxShowBorder")
+		self.Box.RemoveCSSClass("infoBoxShowBackground")
 	}
 }
 
@@ -1026,7 +1026,7 @@ func (self *overallLuck) setProgress(...interface{}) {
 }
 
 func (self *overallLuck) setCounter(countable Countable) {
-	if countable.IsNil() {
+	if countable == Countable(nil) {
 		return
 	}
 	self.setProgress()
@@ -1034,9 +1034,9 @@ func (self *overallLuck) setCounter(countable Countable) {
 
 func (self *overallLuck) setBorder(setShown bool) {
 	if setShown {
-		self.Box.AddCSSClass("infoBoxShowBorder")
+		self.Box.AddCSSClass("infoBoxShowBackground")
 	} else {
-		self.Box.RemoveCSSClass("infoBoxShowBorder")
+		self.Box.RemoveCSSClass("infoBoxShowBackground")
 	}
 }
 

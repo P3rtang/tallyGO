@@ -2,7 +2,6 @@ package countable
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	EventBus "tallyGo/eventBus"
 	"time"
@@ -105,10 +104,6 @@ func (self *Phase) SetCompleted(isCompleted bool) {
 	EventBus.GetGlobalBus().SendSignal(CompletedStatus, self)
 }
 
-func (self *Phase) IsNil() bool {
-	return self == nil
-}
-
 func (self *Phase) UnmarshalJSON(bytes []byte) (err error) {
 	var objMap map[string]*json.RawMessage
 	err = json.Unmarshal(bytes, &objMap)
@@ -123,8 +118,6 @@ func (self *Phase) UnmarshalJSON(bytes []byte) (err error) {
 
 	var progressObjMap map[string]interface{}
 	err = json.Unmarshal(*objMap["Progress"], &progressObjMap)
-
-	fmt.Println("ProgressMap: ", progressObjMap)
 
 	switch progressObjMap["type"] {
 	case "DefaultOdds":
