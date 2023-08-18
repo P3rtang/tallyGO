@@ -169,8 +169,15 @@ func (self *Counter) IsCompleted() (isCompleted bool) {
 }
 
 func (self *Counter) SetCompleted(isCompleted bool) {
+	// when settings a counter to incomplete only the last phase should be unlocked
+	if !isCompleted {
+		self.Phases[len(self.Phases)-1].SetCompleted(false)
+		return
+	}
+
+	// otherwise lock every phase when settings completed
 	for _, p := range self.Phases {
-		p.SetCompleted(true)
+		p.SetCompleted(isCompleted)
 	}
 }
 

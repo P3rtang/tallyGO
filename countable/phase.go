@@ -102,6 +102,7 @@ func (self *Phase) SetCharm(hasCharm bool) {
 
 func (self *Phase) SetCompleted(isCompleted bool) {
 	self.IsCompleted = isCompleted
+	EventBus.GetGlobalBus().SendSignal(CompletedStatus, self)
 }
 
 func (self *Phase) IsNil() bool {
