@@ -1,7 +1,6 @@
 package input
 
 import (
-	"log"
 	"os"
 	"strings"
 	EventBus "tallyGo/eventBus"
@@ -12,9 +11,9 @@ import (
 
 const (
 	DevKeyPressed  EventBus.Signal = "DevKeyPressed"
-	DevKeyReleased                    = "DevKeyReleased"
-	SimKeyPressed                     = "SimKeyPressed"
-	SimKeyReleased                    = "SimKeyReleased"
+	DevKeyReleased                 = "DevKeyReleased"
+	SimKeyPressed                  = "SimKeyPressed"
+	SimKeyReleased                 = "SimKeyReleased"
 )
 
 type InputHandler interface {
@@ -75,7 +74,6 @@ func (self *DevInput) readEvent(hasEvent chan bool) {
 		}
 		hasEvent <- true
 	} else {
-		log.Println("[WARN] Could not open device file, Got Error: ", err)
 		hasEvent <- false
 	}
 }
