@@ -25,10 +25,29 @@ type Countable interface {
 }
 
 const (
-	NameChanged     EventBus.Signal = "NameChanged"
-	CountChanged                    = "CountChanged"
-	TimeChanged                     = "TimeChanged"
-	CompletedStatus                 = "CompletedStatus"
+	// callback arguments (Countable)
+	NameChanged EventBus.Signal = "NameChanged"
+	// callback arguments (Countable)
+	CountChanged = "CountChanged"
+	// callback arguments (Countable)
+	TimeChanged = "TimeChanged"
+	// callback arguments (Countable)
+	CompletedStatus = "CompletedStatus"
+
+	// callback arguments ([]Countable)
+	ListActiveChanged EventBus.Signal = "ListActiveChanged"
+
+	// callback arguments (*Counter)
+	RemoveCounter = "RemoveCounter"
+	// callback arguments (*Counter)
+	CounterRemoved = "CounterRemoved"
+
+	// callback arguments (*Counter, newPhase)
+	PhaseAdded = "PhaseAdded"
+	// callback arguments (*Phase)
+	RemovePhase = "RemovePhase"
+	// callback arguments (*Counter, *Phase)
+	PhaseRemoved = "PhaseRemoved"
 )
 
 type ProgressType int

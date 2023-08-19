@@ -27,35 +27,27 @@ dialog {
     margin-top: 4px;
 }
 
-.counterTreeView expander {
+.counterTreeView expander:first-child {
     padding-left: 6px;
 }
 
 .counterTreeView row {
     margin: 2px;
-    padding: 4px;
+    padding: 2px;
     border-radius: 14px;
 }
 
-.treeViewShim {
+.counterTreeView separator {
     margin: 2px;
     font-size: 0px;
 }
 
 .counterTreeView label {
     font-size: 16px;
-    padding: 5px;
+    padding: 6px;
 }
 
-.phaseRow {
-    margin-left: 36px;
-}
-
-.phaseRow label {
-    margin-left: 6px;
-}
-
-#buttonAddPhase {
+.counterTreeView button {
     margin: 0px;
     padding: 0px;
     min-height: 32px;
@@ -63,12 +55,18 @@ dialog {
     border-radius: 12px;
 }
 
-#treeViewScrollWindow {
-    min-width: 300px;
+.counterTreeView image {
+    padding: 0px;
+    margin: 0px;
+    margin-right: 4px;
 }
 
-.buttonAddPhase label {
-    font-size: 14px;
+.counterTreeView #PhaseRow {
+    margin-left: 24px;
+}
+
+#treeViewScrollWindow {
+    min-width: 300px;
 }
 
 .settingsListView {

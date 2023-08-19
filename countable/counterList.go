@@ -6,17 +6,25 @@ import (
 	"gonum.org/v1/gonum/stat/distuv"
 )
 
-const (
-	ListActiveChanged EventBus.Signal = "ListActiveChanged"
-)
-
 type CounterList struct {
 	List   []*Counter
 	active []Countable
 }
 
-func NewCounterList(list []*Counter) *CounterList {
-	return &CounterList{list, nil}
+func NewCounterList(list []*Counter) (self *CounterList) {
+	self = &CounterList{list, nil}
+	self.setupListeners()
+	return
+}
+
+func (self *CounterList) setupListeners() {
+	EventBus.GetGlobalBus().Subscribe(RemoveCounter, func(args ...interface{}) {
+		self.RemoveCounter(args[0].(*Counter))
+	})
+
+	EventBus.GetGlobalBus().Subscribe(RemovePhase, func(args ...interface{}) {
+		self.RemovePhase(args[0].(*Phase))
+	})
 }
 
 func (self *CounterList) GetActive() []Countable {
@@ -36,13 +44,22 @@ func (self *CounterList) SetActive(countables ...Countable) {
 	EventBus.GetGlobalBus().SendSignal(ListActiveChanged, data...)
 }
 
-func (self *CounterList) Remove(counter *Counter) {
+func (self *CounterList) RemoveCounter(counter *Counter) {
 	if idx, ok := self.GetIdx(counter); ok {
 		if idx < len(self.List)-1 {
 			self.List = append(self.List[:idx], self.List[idx+1:len(self.List)]...)
 
 		} else {
 			self.List = self.List[:idx]
+		}
+	}
+	EventBus.GetGlobalBus().SendSignal(CounterRemoved, counter)
+}
+
+func (self *CounterList) RemovePhase(phase *Phase) {
+	for _, c := range self.List {
+		if c.hasPhase(phase) {
+			c.RemovePhase(phase)
 		}
 	}
 }

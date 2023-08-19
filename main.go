@@ -12,6 +12,7 @@ import (
 	EventBus "tallyGo/eventBus"
 	"tallyGo/input"
 	"tallyGo/settings"
+	"tallyGo/treeview"
 	"time"
 
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
@@ -108,7 +109,7 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 		saveDataHandler.Save()
 	})
 
-	counterTV := newCounterTreeView(counters, self)
+	counterTV := treeview.NewCounterTreeView(counters)
 
 	scrollView := gtk.NewScrolledWindow()
 	scrollView.SetChild(counterTV)
@@ -243,7 +244,6 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 			self.isTimingActive = !self.isTimingActive
 		}
 	})
-	counterTV.CollapseAll()
 
 	return
 }
@@ -281,400 +281,6 @@ func (self *HomeApplicationWindow) HandleNotify() {
 		self.headerBar.SetVisible(false)
 	} else {
 		self.headerBar.SetVisible(true)
-	}
-}
-
-func createColumn(title string, id int) *gtk.TreeViewColumn {
-	cellRenderer := gtk.NewCellRendererText()
-	column := gtk.NewTreeViewColumn()
-	column.SetTitle(title)
-
-	column.PackEnd(cellRenderer, false)
-	column.AddAttribute(cellRenderer, "text", int(id))
-	column.SetResizable(true)
-
-	return column
-}
-
-type CounterTreeView struct {
-	*gtk.ListView
-	store      *gio.ListStore
-	selection  *gtk.SingleSelection
-	expanders  []*CounterExpander
-	homeWindow *HomeApplicationWindow
-}
-
-func newCounterTreeView(cList *CounterList, homeWindow *HomeApplicationWindow) (self *CounterTreeView) {
-	store := gio.NewListStore(glib.TypeObject)
-	var expanderList []*CounterExpander
-
-	self = &CounterTreeView{nil, store, nil, expanderList, homeWindow}
-
-	treeStore := gtk.NewTreeListModel(store, false, true, self.createTreeModel)
-	ssel := gtk.NewSingleSelection(treeStore)
-	tv := gtk.NewListView(ssel, nil)
-	tv.AddCSSClass("counterTreeView")
-	tv.SetVExpand(true)
-
-	self.ListView = tv
-	self.selection = ssel
-
-	factory := gtk.NewSignalListItemFactory()
-	factory.ConnectBind(self.bindRow)
-	tv.SetFactory(&factory.ListItemFactory)
-
-	ssel.SetAutoselect(false)
-	ssel.ConnectSelectionChanged(self.newSelection)
-
-	newCounterButton := gtk.NewButtonWithLabel("New Counter")
-	newCounterButton.ConnectClicked(func() {
-		counter := NewCounter("Test", 0, OldOdds)
-		self.addCounter(counter, cList)
-
-		cList.List = append(cList.List, counter)
-	})
-
-	store.Append(newCounterButton.Object)
-
-	for _, counter := range cList.List {
-		self.addCounter(counter, cList)
-	}
-
-	return
-}
-
-func (self *CounterTreeView) CollapseAll() {
-	for _, exp := range self.expanders {
-		if row := exp.ListRow(); row != nil {
-			row.SetExpanded(false)
-		}
-	}
-}
-
-func (self *CounterTreeView) addCounter(counter *Counter, cList *CounterList) {
-	expander := newCounterExpander(counter)
-	expander.contextMenu.ConnectRowClick("delete", func() {
-		if idx, ok := self.store.Find(expander.Object); ok {
-			self.store.Remove(idx)
-			// remove the separator
-			self.store.Remove(idx)
-			cList.Remove(counter)
-		} else {
-			fmt.Printf("[4040] [WARN] Could not find Counter to delete")
-		}
-	})
-	expander.contextMenu.ConnectRowClick("edit", func() {
-		dialog := NewEditDialog(counter)
-		dialog.Show()
-	})
-	expander.contextMenu.ConnectRowClick("mark complete", func() {
-		if counter.IsCompleted() {
-			counter.SetCompleted(false)
-			expander.contextMenu.rows["mark complete"].SetText("mark complete")
-		} else {
-			counter.SetCompleted(true)
-			expander.contextMenu.rows["mark complete"].SetText("mark in progress")
-		}
-	})
-
-	self.expanders = append(self.expanders, expander)
-
-	items := self.store.NItems()
-	self.store.Insert(items-1, expander.Object)
-	sep := gtk.NewSeparator(gtk.OrientationHorizontal)
-	self.store.Insert(items, sep.Object)
-}
-
-func (self *CounterTreeView) newSelection(position uint, nItems uint) {
-	row := self.selection.Item(self.selection.Selected()).Cast().(*gtk.TreeListRow)
-	self.homeWindow.isTimingActive = false
-
-	var phaseNum uint
-	var counter *Counter
-	switch row.Depth() {
-	case 0:
-		// exp := row.Item().Cast().(*gtk.TreeExpander)
-		counter = getCounterExpander(row.Item(), self.expanders).counter
-		phaseNum = uint(len(counter.Phases))
-		self.homeWindow.infoBox.counterList.SetActive(counter)
-	case 1:
-		parentRow := row.Parent()
-		// exp := parentRow.Item().Cast().(*gtk.TreeExpander)
-		counter = getCounterExpander(parentRow.Item(), self.expanders).counter
-		phaseNum = row.Position() - parentRow.Position()
-		phase := counter.Phases[phaseNum-1]
-		self.homeWindow.infoBox.counterList.SetActive(phase)
-	}
-}
-
-func (self *CounterTreeView) createTreeModel(gObj *glib.Object) *gio.ListModel {
-	if gObj.Type().Name() != "GtkTreeExpander" {
-		return nil
-	}
-
-	// expander, _ := gObj.Cast().(*gtk.TreeExpander)
-	store := getCounterExpander(gObj, self.expanders).store
-
-	return &store.ListModel
-}
-
-func (self *CounterTreeView) bindRow(listItem *gtk.ListItem) {
-	row := listItem.Item().Cast().(*gtk.TreeListRow)
-	switch row.Item().Type().Name() {
-	case "GtkTreeExpander":
-		for _, exp := range self.expanders {
-			if exp.Object.Eq(row.Item()) {
-				exp.SetListRow(row)
-				listItem.SetChild(exp)
-			}
-		}
-
-		break
-	case "GtkLabel":
-		label := row.Item().Cast().(*gtk.Label)
-		listItem.SetChild(label)
-	case "GtkBox":
-		box := row.Item().Cast().(*gtk.Box)
-		listItem.SetChild(box)
-	case "GtkSeparator":
-		listItem.SetSelectable(false)
-		listItem.SetActivatable(false)
-		sep := row.Item().Cast().(*gtk.Separator)
-		listItem.SetChild(sep)
-	case "GtkButton":
-		listItem.SetSelectable(false)
-		listItem.SetActivatable(false)
-		button := row.Item().Cast().(*gtk.Button)
-		listItem.SetChild(button)
-	}
-}
-
-func getCounterExpander(object *glib.Object, counters []*CounterExpander) (counter *CounterExpander) {
-	for _, c := range counters {
-		if c.Object.Eq(object) {
-			return c
-		}
-	}
-	return
-}
-
-type CounterExpander struct {
-	*gtk.TreeExpander
-	counter *Counter
-
-	store       *gio.ListStore
-	contextMenu *TreeRowContextMenu
-}
-
-func newCounterExpander(counter *Counter) (self *CounterExpander) {
-	if counter == nil {
-		return nil
-	}
-
-	expander := gtk.NewTreeExpander()
-	shortcutCtrl, ok := expander.ObserveControllers().Item(1).Cast().(*gtk.ShortcutController)
-	if ok {
-		expander.RemoveController(shortcutCtrl)
-	}
-
-	store := gio.NewListStore(glib.TypeObject)
-
-	box := gtk.NewBox(gtk.OrientationHorizontal, 0)
-	box.AddCSSClass("counterBoxRow")
-
-	label := gtk.NewLabel(counter.Name)
-	label.SetHExpand(true)
-	label.SetXAlign(0)
-
-	button := gtk.NewButtonWithLabel("+")
-	button.SetName("buttonAddPhase")
-	button.ConnectClicked(func() {
-		phase := counter.NewPhase(counter.ProgressType)
-		row := newPhaseRow(phase)
-		row.contextMenu.ConnectRowClick("delete", func() {
-			for i, p := range self.counter.Phases {
-				if p == phase {
-					self.counter.Phases = append(self.counter.Phases[:i], self.counter.Phases[i+1:]...)
-					idx, ok := store.Find(row.Object)
-					if ok {
-						store.Remove(idx)
-					}
-				}
-			}
-		})
-		store.Append(row.Object)
-	})
-
-	box.Append(label)
-	box.Append(button)
-	expander.SetChild(box)
-
-	contextMenu := newTreeRowContextMenu()
-	contextMenu.NewRow("mark complete")
-	contextMenu.NewRow("edit")
-	contextMenu.NewRow("delete")
-	contextMenu.SetParent(&box.Widget)
-
-	if !counter.IsCompleted() {
-		contextMenu.rows["mark complete"].SetText("mark complete")
-	} else {
-		contextMenu.rows["mark complete"].SetText("mark in progress")
-	}
-
-	for _, phase := range counter.Phases {
-		row := newPhaseRow(phase)
-		row.contextMenu.ConnectRowClick("delete", func() {
-			for i, p := range self.counter.Phases {
-				if p == phase {
-					println(i)
-					self.counter.Phases = append(self.counter.Phases[:i])
-					idx, ok := store.Find(row.Object)
-					if ok {
-						store.Remove(idx)
-					}
-				}
-			}
-		})
-		store.Append(row.Object)
-	}
-
-	self = &CounterExpander{expander, counter, store, contextMenu}
-	EventBus.GetGlobalBus().Subscribe(NameChanged, func(args ...interface{}) {
-		label.SetText(counter.Name)
-	})
-
-	return
-}
-
-type TreeRowContextMenu struct {
-	*gtk.Popover
-	items *gtk.ListBox
-	rows  map[string]*gtk.Label
-}
-
-func newTreeRowContextMenu() *TreeRowContextMenu {
-	rows := make(map[string]*gtk.Label)
-
-	contextItems := gtk.NewListBox()
-	contextItems.UnselectAll()
-	contextItems.SetSelectionMode(gtk.SelectionNone)
-
-	contextMenu := gtk.NewPopover()
-	contextMenu.SetName("treeViewContext")
-	contextMenu.SetChild(contextItems)
-	contextMenu.SetHasArrow(false)
-
-	return &TreeRowContextMenu{
-		contextMenu,
-		contextItems,
-		rows,
-	}
-}
-
-func (self *TreeRowContextMenu) SetParent(parent *gtk.Widget) {
-	self.Popover.SetParent(parent)
-
-	gesture := gtk.NewGestureClick()
-	gesture.SetButton(3)
-	gesture.ConnectPressed(func(int, float64, float64) {
-		self.Popover.Show()
-	})
-	parent.AddController(gesture)
-}
-
-func (self *TreeRowContextMenu) NewRow(text string) {
-	button := gtk.NewLabel(text)
-	button.SetXAlign(0)
-	self.rows[text] = button
-	self.items.Append(button)
-}
-
-func (self *TreeRowContextMenu) ConnectRowClick(rowName string, f func()) {
-	gesture := gtk.NewGestureClick()
-	gesture.ConnectPressed(func(int, float64, float64) {
-		self.Unmap()
-		glib.IdleAdd(func() {
-			f()
-		})
-	})
-	self.rows[rowName].AddController(gesture)
-}
-
-type ContextMenuRow uint
-
-const (
-	RowDelete ContextMenuRow = iota
-)
-
-type PhaseRow struct {
-	*gtk.Box
-	label       *gtk.Label
-	lock        *gtk.Image
-	contextMenu *TreeRowContextMenu
-
-	phase *Phase
-}
-
-func newPhaseRow(phase *Phase) (self *PhaseRow) {
-	if phase == nil {
-		return nil
-	}
-
-	box := gtk.NewBox(gtk.OrientationHorizontal, 0)
-	box.AddCSSClass("phaseRow")
-
-	label := gtk.NewLabel(phase.Name)
-	label.SetHAlign(gtk.AlignStart)
-
-	EventBus.GetGlobalBus().Subscribe(NameChanged, func(args ...interface{}) {
-		label.SetText(phase.Name)
-	})
-
-	contextMenu := newTreeRowContextMenu()
-	contextMenu.NewRow("lock")
-	contextMenu.NewRow("edit")
-	contextMenu.NewRow("delete")
-
-	lock := gtk.NewImageFromIconName("padlock-unlocked")
-	box.Append(lock)
-	box.Append(label)
-
-	contextMenu.SetParent(&box.Widget)
-
-	self = &PhaseRow{
-		box,
-		label,
-		lock,
-		contextMenu,
-		phase,
-	}
-	self.UpdateLock()
-
-	contextMenu.ConnectRowClick("edit", func() {
-		dialog := NewEditDialog(phase)
-		dialog.Present()
-	})
-
-	contextMenu.ConnectRowClick("lock", func() {
-		phase.SetCompleted(!phase.IsCompleted)
-	})
-
-	EventBus.GetGlobalBus().Subscribe(CompletedStatus, func(...interface{}) {
-		self.UpdateLock()
-	})
-
-	return
-}
-
-func (self *PhaseRow) UpdateLock() {
-	label := self.contextMenu.rows["lock"]
-
-	if !self.phase.IsCompleted {
-		self.lock.SetFromIconName("padlock-unlocked")
-		label.SetText("lock")
-	} else {
-		self.lock.SetFromIconName("padlock")
-		label.SetText("unlock")
 	}
 }
 
@@ -968,7 +574,7 @@ func (self *SaveFileHandler) Save() (err error) {
 func (self *SaveFileHandler) Restore() (err error) {
 	var saveData []byte
 	if saveData, err = os.ReadFile(self.filePath); err != nil {
-		log.Fatal("[FATAL] Could not Read save file, Got Error: ", err)
+		log.Fatal("[FATAL]\tCould not Read save file, Got Error: ", err)
 		return
 	}
 
@@ -980,13 +586,13 @@ func (self *SaveFileHandler) Restore() (err error) {
 	}
 
 	if self.SettingsData == nil {
-		log.Printf("[INFO]\t Found no Settings data in savefile, generating default Settings")
+		log.Printf("[INFO]\tFound no Settings data in savefile, generating default Settings")
 		self.SettingsData = settings.NewSettings()
 	} else {
-		log.Printf("[INFO]\t Found Settings data in savefile, loading Settings")
+		log.Printf("[INFO]\tFound Settings data in savefile, loading Settings")
 	}
 
-	log.Printf("[INFO]\t Loaded %d Counters\n", len(self.CounterData))
+	log.Printf("[INFO]\tLoaded %d Counters\n", len(self.CounterData))
 
 	return
 }

@@ -19,7 +19,7 @@ type Counter struct {
 
 func NewCounter(name string, _ int, progressType ProgressType) (counter *Counter) {
 	counter = &Counter{name, []*Phase{}, progressType, nil}
-	counter.NewPhase(progressType)
+	counter.NewPhase()
 	return
 }
 
@@ -32,7 +32,7 @@ func (self *Counter) SetName(name string) {
 	EventBus.GetGlobalBus().SendSignal(NameChanged, self.Name)
 }
 
-func (self *Counter) NewPhase(progressType ProgressType) *Phase {
+func (self *Counter) NewPhase() *Phase {
 	phaseName := fmt.Sprintf("Phase_%d", len(self.Phases)+1)
 	newPhase := &Phase{
 		phaseName,
@@ -42,10 +42,30 @@ func (self *Counter) NewPhase(progressType ProgressType) *Phase {
 		false,
 	}
 
-	newPhase.SetProgressType(progressType)
+	newPhase.SetProgressType(self.ProgressType)
 	self.Phases = append(self.Phases, newPhase)
 
+	EventBus.GetGlobalBus().SendSignal(PhaseAdded, self, newPhase)
+
 	return newPhase
+}
+
+func (self *Counter) hasPhase(phase *Phase) bool {
+	for _, p := range self.Phases {
+		if p == phase {
+			return true
+		}
+	}
+	return false
+}
+
+func (self *Counter) RemovePhase(phase *Phase) {
+	for idx, p := range self.Phases {
+		if p == phase && !p.IsCompleted {
+			self.Phases = append(self.Phases[:idx], self.Phases[idx+1:]...)
+		}
+	}
+	EventBus.GetGlobalBus().SendSignal(PhaseRemoved, self, phase)
 }
 
 func (self *Counter) GetChance() (chance float64) {
