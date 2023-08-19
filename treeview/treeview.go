@@ -65,9 +65,21 @@ func NewCounterTreeView(counters *CounterList) (self *CounterTreeView) {
 		self.store.Append(sep.Object)
 	}
 
+	addCounterButton := gtk.NewButtonWithLabel("New Counter")
+	addCounterButton.ConnectClicked(func() {
+		counters.NewCounter()
+	})
+	self.store.Append(addCounterButton.Object)
+
+	EventBus.GetGlobalBus().Subscribe(CounterAdded, func(args ...interface{}) {
+		self.AddCounter(args[0].(*Counter))
+	})
+
 	EventBus.GetGlobalBus().Subscribe(CounterRemoved, func(args ...interface{}) {
 		counter := args[0].(*Counter)
 		if idx, ok := self.GetIdxFromCounter(counter); ok {
+			self.store.Remove(idx)
+			// remove the Separator
 			self.store.Remove(idx)
 		}
 	})
@@ -106,9 +118,20 @@ func (self *CounterTreeView) bindRow(listItem *gtk.ListItem) {
 	}
 }
 
+func (self *CounterTreeView) AddCounter(counter *Counter) {
+	row := NewCounterRow(counter, self.objects)
+	self.objects[row.Object] = row
+	self.store.Insert(self.store.NItems()-1, row.Object)
+	sep := gtk.NewSeparator(gtk.OrientationHorizontal)
+	self.store.Insert(self.store.NItems()-1, sep.Object)
+}
+
 func (self *CounterTreeView) GetIdxFromCounter(counter *Counter) (uint, bool) {
 	for i := uint(0); i < self.store.NItems(); i++ {
 		rowObj := findRowObj(self.objects, self.store.Item(i))
+		if rowObj == nil {
+			continue
+		}
 		if c, ok := rowObj.Countable().(*Counter); ok {
 			if c == counter {
 				return i, true

@@ -47,7 +47,7 @@ dialog {
     padding: 6px;
 }
 
-.counterTreeView button {
+.counterTreeView row:not(:last-child) button {
     margin: 0px;
     padding: 0px;
     min-height: 32px;
