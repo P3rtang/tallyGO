@@ -79,7 +79,7 @@ func (self *PhaseRow) SetupContextMenu() {
 	self.contextMenu.NewRow("edit", func() {
 	})
 	self.contextMenu.NewRow("delete", func() {
-		EventBus.GetGlobalBus().SendSignal(RemoveCounter, self.phase)
+		EventBus.GetGlobalBus().SendSignal(RemovePhase, self.phase)
 	})
 }
 
