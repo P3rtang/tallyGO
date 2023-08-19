@@ -38,6 +38,8 @@ const (
 	ListActiveChanged EventBus.Signal = "ListActiveChanged"
 
 	// callback arguments (*Counter)
+	CounterAdded = "CounterAdded"
+	// callback arguments (*Counter)
 	RemoveCounter = "RemoveCounter"
 	// callback arguments (*Counter)
 	CounterRemoved = "CounterRemoved"

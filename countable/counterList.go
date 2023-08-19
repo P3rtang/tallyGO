@@ -1,6 +1,7 @@
 package countable
 
 import (
+	"log"
 	EventBus "tallyGo/eventBus"
 
 	"gonum.org/v1/gonum/stat/distuv"
@@ -44,16 +45,19 @@ func (self *CounterList) SetActive(countables ...Countable) {
 	EventBus.GetGlobalBus().SendSignal(ListActiveChanged, data...)
 }
 
+func (self *CounterList) NewCounter() {
+	counter := NewCounter("Name...", 0, OldOdds)
+	self.List = append(self.List, counter)
+	EventBus.GetGlobalBus().SendSignal(CounterAdded, counter)
+}
+
 func (self *CounterList) RemoveCounter(counter *Counter) {
 	if idx, ok := self.GetIdx(counter); ok {
-		if idx < len(self.List)-1 {
-			self.List = append(self.List[:idx], self.List[idx+1:len(self.List)]...)
-
-		} else {
-			self.List = self.List[:idx]
-		}
+		EventBus.GetGlobalBus().SendSignal(CounterRemoved, counter)
+		self.List = append(self.List[:idx], self.List[idx+1:]...)
+	} else {
+		log.Println("[WARN]\tTried to delete a non existent Counter")
 	}
-	EventBus.GetGlobalBus().SendSignal(CounterRemoved, counter)
 }
 
 func (self *CounterList) RemovePhase(phase *Phase) {
