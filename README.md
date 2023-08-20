@@ -1,6 +1,6 @@
 # tallyGO
 
-![alt text](https://i.imgur.com/PBqB0U1.png)
+![alt text](https://i.imgur.com/YD4Eztb.png)
 
 ### Meant for Pokemon
 This program is meant to be used to keep track of pokemon shiny hunts
@@ -19,6 +19,7 @@ this will install the app, create the save file and store the needed icons on yo
 ### Dependencies
 This Program depends on the following packages
 - libgtk4-dev
+- libadwaita-1-dev
 - go
 - make
 
