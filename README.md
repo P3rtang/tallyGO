@@ -1,6 +1,6 @@
 # tallyGO
 
-[Imgur](https://i.imgur.com/PBqB0U1.png)
+![alt text](https://i.imgur.com/PBqB0U1.png)
 
 ### Meant for Pokemon
 This program is meant to be used to keep track of pokemon shiny hunts
