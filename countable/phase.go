@@ -22,7 +22,7 @@ func (self *Phase) GetName() (name string) {
 
 func (self *Phase) SetName(name string) {
 	self.Name = name
-	EventBus.GetGlobalBus().SendSignal(NameChanged, self.Name)
+	EventBus.GetGlobalBus().SendSignal(NameChanged, self, self.Name)
 }
 
 func (self *Phase) GetRolls() int {

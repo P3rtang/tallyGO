@@ -44,7 +44,7 @@ func NewCounterTreeView(counters *CounterList) (self *CounterTreeView) {
 			if selectionModel.IsSelected(i) {
 				rowObj := findRowObj(self.objects, selectionModel.Item(i).Cast().(*gtk.TreeListRow).Item())
 				if rowObj == nil {
-					log.Fatal("[FATAL]\tCould not get Underlying Counter from Selection")
+					log.Println("[WARN]\tCould not get Underlying Counter from Selection")
 				}
 				selection = append(selection, rowObj.Countable())
 			}

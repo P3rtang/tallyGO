@@ -29,7 +29,7 @@ func (self *Counter) GetName() (name string) {
 
 func (self *Counter) SetName(name string) {
 	self.Name = name
-	EventBus.GetGlobalBus().SendSignal(NameChanged, self.Name)
+	EventBus.GetGlobalBus().SendSignal(NameChanged, self, self.Name)
 }
 
 func (self *Counter) NewPhase() *Phase {
