@@ -2,6 +2,7 @@ package treeview
 
 import (
 	. "tallyGo/countable"
+	"tallyGo/editdialog"
 	EventBus "tallyGo/eventBus"
 
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
@@ -99,6 +100,8 @@ func (self *CounterRow) SetupContextMenu() {
 		self.contextMenu.rows["mark complete"].SetText("mark incomplete")
 	}
 	self.contextMenu.NewRow("edit", func() {
+		dialog := editdialog.NewEditDialog(self.counter)
+		dialog.Show()
 	})
 	self.contextMenu.NewRow("delete", func() {
 		EventBus.GetGlobalBus().SendSignal(RemoveCounter, self.counter)
@@ -134,6 +137,12 @@ func NewCounterRowBox(counter *Counter) (self *CounterRowBox) {
 	self.button.SetHAlign(gtk.AlignEnd)
 	self.button.ConnectClicked(func() {
 		counter.NewPhase()
+	})
+
+	EventBus.GetGlobalBus().Subscribe(NameChanged, func(args ...interface{}) {
+		if c, ok := args[0].(*Counter); ok && counter == c {
+			self.label.SetText(counter.Name)
+		}
 	})
 
 	return

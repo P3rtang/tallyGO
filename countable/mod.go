@@ -25,7 +25,7 @@ type Countable interface {
 }
 
 const (
-	// callback arguments (Countable)
+	// callback arguments (Countable, NewName: string)
 	NameChanged EventBus.Signal = "NameChanged"
 	// callback arguments (Countable)
 	CountChanged = "CountChanged"

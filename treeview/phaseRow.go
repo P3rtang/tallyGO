@@ -2,6 +2,7 @@ package treeview
 
 import (
 	. "tallyGo/countable"
+	"tallyGo/editdialog"
 	EventBus "tallyGo/eventBus"
 
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
@@ -77,6 +78,8 @@ func (self *PhaseRow) SetupContextMenu() {
 		self.contextMenu.rows["mark complete"].SetText("mark incomplete")
 	}
 	self.contextMenu.NewRow("edit", func() {
+		dialog := editdialog.NewEditDialog(self.phase)
+		dialog.Show()
 	})
 	self.contextMenu.NewRow("delete", func() {
 		EventBus.GetGlobalBus().SendSignal(RemovePhase, self.phase)
