@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	. "tallyGo/countable"
@@ -12,6 +13,7 @@ import (
 	"tallyGo/treeview"
 	"time"
 
+	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
@@ -30,13 +32,13 @@ var CSS_LIGHT string
 //go:embed styleSheets/style-dark.css
 var CSS_DARK string
 
-var APP *gtk.Application
+var APP *adw.Application
 var HOME *HomeApplicationWindow
 
 // TODO: instead of just storing the date counter should store diffs with a time
 // this will improve the info window
 func main() {
-	APP = gtk.NewApplication("com.github.p3rtang.counter", gio.ApplicationFlagsNone)
+	APP = adw.NewApplication("com.github.p3rtang.counter", gio.ApplicationFlagsNone)
 	APP.ConnectActivate(func() { activate(APP) })
 
 	EventBus.InitBus()
@@ -46,7 +48,7 @@ func main() {
 	}
 }
 
-func activate(app *gtk.Application) (err error) {
+func activate(app *adw.Application) (err error) {
 	window := newHomeApplicationWindow(app)
 	window.Show()
 	return
@@ -69,9 +71,9 @@ type HomeApplicationWindow struct {
 	isTimingActive       bool
 }
 
-func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow) {
+func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow) {
 	self = &HomeApplicationWindow{
-		gtk.NewApplicationWindow(app),
+		gtk.NewApplicationWindow(&app.Application),
 		gtk.NewOverlay(),
 		gtk.NewGrid(),
 		nil,
@@ -79,11 +81,13 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 		nil,
 		gtk.NewRevealer(),
 		false,
-		gtk.NewButtonFromIconName("open-menu-symbolic"),
+		gtk.NewButtonFromIconName("sidebar-show-symbolic"),
 		gtk.NewToggleButton(),
 		gtk.NewHeaderBar(),
 		false,
 	}
+
+	fmt.Println(APP.ActiveWindow().Settings().ObjectProperty("gtk-theme-name"))
 
 	HOME = self
 	eventBus := EventBus.GetGlobalBus()
@@ -124,10 +128,10 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 		}
 	})
 
-	self.settingsButton.SetIconName("applications-system-symbolic")
+	self.settingsButton.SetIconName("open-menu-symbolic")
 	self.settingsButton.SetName("settingsButton")
 	image := self.settingsButton.Child().(*gtk.Image)
-	image.SetPixelSize(20)
+	image.SetPixelSize(18)
 	self.settingsButton.ConnectToggled(func() {
 		if self.settingsButton.Active() {
 			self.overlay.SetChild(self.settingsGrid)
@@ -138,7 +142,7 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 
 	self.headerBar.PackStart(self.collapseButton)
 	self.headerBar.PackEnd(self.settingsButton)
-	self.Window.SetTitlebar(self.headerBar)
+	self.SetTitlebar(self.headerBar)
 
 	self.SetChild(self.overlay)
 	self.overlay.SetChild(self.homeGrid)
@@ -151,9 +155,9 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 
 	themeCSS := gtk.NewCSSProvider()
 	gtk.StyleContextAddProviderForDisplay(gdk.DisplayGetDefault(), themeCSS, gtk.STYLE_PROVIDER_PRIORITY_SETTINGS+1)
-	self.setCSSTheme(themeCSS)
 
-	saveDataHandler.SettingsData.ConnectChanged(settings.DarkMode, func(_ any) {
+	self.setCSSTheme(themeCSS)
+	APP.StyleManager().NotifyProperty("dark", func() {
 		self.setCSSTheme(themeCSS)
 	})
 
@@ -246,10 +250,7 @@ func newHomeApplicationWindow(app *gtk.Application) (self *HomeApplicationWindow
 }
 
 func (self *HomeApplicationWindow) setCSSTheme(css *gtk.CSSProvider) {
-	if self.settings.GetValue(settings.DarkMode) == nil {
-		self.settings.SetValue(settings.DarkMode, false)
-	}
-	if self.settings.GetValue(settings.DarkMode).(bool) {
+	if APP.StyleManager().Dark() {
 		gtk.SettingsGetDefault().SetObjectProperty("gtk-theme-name", "Adwaita-dark")
 		css.LoadFromData(CSS_DARK)
 	} else {

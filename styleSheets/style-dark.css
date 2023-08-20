@@ -1,16 +1,44 @@
 @define-color highlight rgba(139, 233, 253, 1);
 
-button {
-    background: #444444;
+window {
+    background: #242424;
+}
+
+headerbar {
+    background: #303030;
+}
+
+headerbar button:hover {
+    background: #FFFFFF15;
+}
+
+windowcontrols button:hover {
+    background: none;
+}
+
+overlay button {
+    background: #383838;
+}
+
+overlay button:hover {
+    background: #515151;
 }
 
 separator {
-    background: #CCCCCC;
+    background: #666666;
 }
 
 row:selected {
     background: @highlight;
     color: black;
+}
+
+.counterTreeView {
+    background: #242424;
+}
+
+.counterTreeView {
+    border-right: 1px solid #666666;
 }
 
 .progressGreen progress {
@@ -30,7 +58,7 @@ row:selected {
 }
 
 .infoBoxShowBackground {
-    background: #444444;
+    background: #383838;
 }
 
 #widget, .selected {

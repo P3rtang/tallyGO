@@ -1,3 +1,7 @@
+* {
+    box-shadow: none;
+}
+
 grid {
     border: 0px;
 }
@@ -6,17 +10,27 @@ button {
     border: 0px;
 }
 
-#settingsButton image {
+headerbar button {
+    min-width: 24px;
+    min-height: 24px;
+    background: none;
+}
+
+headerbar box {
     padding: 0px;
-    margin: 2px;
+}
+
+windowcontrols button {
+    padding: 5px;
+    margin-left: 0px;
+}
+
+windowcontrols image {
+    padding: 4px;
 }
 
 dialog {
     background: transparent;
-}
-
-.activatable {
-    box-shadow: none;
 }
 
 .counterTreeView {
@@ -33,12 +47,13 @@ dialog {
 
 .counterTreeView row {
     margin: 2px;
-    padding: 2px;
+    padding: 4px;
     border-radius: 14px;
 }
 
 .counterTreeView separator {
-    margin: 2px;
+    padding: 0px;
+    margin: 0px;
     font-size: 0px;
 }
 
@@ -104,10 +119,6 @@ dialog {
     min-width: 200px;
     border-radius: 8px;
     padding: 1px;
-    box-shadow: none;
-}
-
-#treeViewContext row:hover {
     box-shadow: none;
 }
 

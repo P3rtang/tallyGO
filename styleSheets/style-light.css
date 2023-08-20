@@ -1,13 +1,30 @@
-headerbar button {
+window {
     background: #FFFFFF;
 }
 
-button {
+headerbar {
+    background: #EEEEEE;
+}
+
+headerbar button:hover {
+    background: #00000015;
+}
+
+windowcontrols button:hover {
+    background: none;
+}
+
+overlay button {
     background: #DDDDDD;
 }
 
-button:hover {
+overlay button:hover {
     background: #CCCCCC;
+}
+
+
+.counterTreeView {
+    border-right: 1px solid #AAAAAA66;
 }
 
 .progressGreen progress {
