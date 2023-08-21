@@ -1,10 +1,14 @@
 # tallyGO
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 ![alt text](https://i.imgur.com/YD4Eztb.png)
 =======
 [Imgur](https://i.imgur.com/PBqB0U1.png)
 >>>>>>> 87b7dd3 (Create README.md)
+=======
+![alt text](https://i.imgur.com/PBqB0U1.png)
+>>>>>>> fe3d6d2 (Update README.md)
 
 ### Meant for Pokemon
 This program is meant to be used to keep track of pokemon shiny hunts
