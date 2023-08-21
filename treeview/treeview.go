@@ -48,9 +48,13 @@ func NewCounterTreeView(counters *CounterList) (self *CounterTreeView) {
 			if selectionModel.IsSelected(i) {
 				rowObj := findRowObj(self.objects, selectionModel.Item(i).Cast().(*gtk.TreeListRow).Item())
 				if rowObj == nil {
+					selectionModel.UnselectItem(i)
+					if selectionModel.Item(i).Type().Name() == "GtkTreeExpander" {
 					log.Println("[WARN]\tCould not get Underlying Counter from Selection")
+					}
+				} else {
+					selection = append(selection, rowObj.Countable())
 				}
-				selection = append(selection, rowObj.Countable())
 			}
 		}
 		counters.SetActive(selection...)
