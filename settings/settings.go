@@ -30,6 +30,10 @@ func (self *Settings) ConnectChanged(key SettingsKey, f func(value any)) {
 	self.callbacks[key] = append(self.callbacks[key], f)
 }
 
+func (self *Settings) HasValue(key SettingsKey) bool {
+	return self.Items[key] != nil
+}
+
 func (self *Settings) GetValue(key SettingsKey) any {
 	return self.Items[key]
 }
@@ -47,6 +51,7 @@ const (
 	None SettingsKey = iota
 	ActiveKeyboard
 	DarkMode
+	SideBarSize
 )
 
 type SettingsMenu struct {

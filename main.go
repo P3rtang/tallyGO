@@ -9,6 +9,7 @@ import (
 	. "tallyGo/countable"
 	EventBus "tallyGo/eventBus"
 	"tallyGo/input"
+	"tallyGo/resizebar"
 	"tallyGo/settings"
 	"tallyGo/treeview"
 	"time"
@@ -22,6 +23,9 @@ import (
 
 const FRAME_TIME = time.Millisecond * 33
 const SAVE_STRATEGY = JSON
+
+const INIT_WIDTH = 960
+const INIT_HEIGHT = 680
 
 //go:embed styleSheets/style.css
 var CSS_FILE string
@@ -53,6 +57,19 @@ func activate(app *adw.Application) (err error) {
 	window.Show()
 	return
 }
+
+type AppLayout string
+
+const (
+	LayoutPanes          AppLayout = "ShowPanes"
+	LayoutSingleTreeView           = "SingleTreeView"
+	LayoutSingleInfoBox            = "SingleInfoBox"
+)
+
+const (
+	// callback arguments (*gtk.Window)
+	LayoutChanged EventBus.Signal = "LayoutChanged"
+)
 
 type HomeApplicationWindow struct {
 	*gtk.ApplicationWindow
@@ -113,6 +130,7 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 	counterTV := treeview.NewCounterTreeView(counters)
 
 	scrollView := gtk.NewScrolledWindow()
+	scrollView.SetPropagateNaturalWidth(true)
 	scrollView.SetChild(counterTV)
 	scrollView.SetName("treeViewScrollWindow")
 
@@ -120,11 +138,14 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 	self.treeViewRevealer.SetChild(scrollView)
 	self.treeViewRevealer.SetRevealChild(true)
 
-	self.collapseButton.ConnectClicked(func() {
-		if self.treeViewRevealer.RevealChild() {
-			self.treeViewRevealer.SetRevealChild(false)
-		} else {
-			self.treeViewRevealer.SetRevealChild(true)
+	self.Window.ConnectShow(func() {
+		if self.settings.HasValue(settings.SideBarSize) {
+			if self.settings.GetValue(settings.SideBarSize).(float64) > INIT_WIDTH {
+				counterTV.SetSizeRequest(240, -1)
+			} else {
+				counterTV.SetSizeRequest(
+					int(self.settings.GetValue(settings.SideBarSize).(float64)), -1)
+			}
 		}
 	})
 
@@ -146,8 +167,9 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 
 	self.SetChild(self.overlay)
 	self.overlay.SetChild(self.homeGrid)
-	self.SetDefaultSize(900, 660)
-	self.NotifyProperty("default-width", self.HandleNotify)
+	self.SetDefaultSize(INIT_WIDTH, INIT_HEIGHT)
+	self.NotifyProperty("default-width", func() { EventBus.GetGlobalBus().SendSignal(LayoutChanged, &self.Window) })
+	self.NotifyProperty("default-height", func() { EventBus.GetGlobalBus().SendSignal(LayoutChanged, &self.Window) })
 
 	css := gtk.NewCSSProvider()
 	gtk.StyleContextAddProviderForDisplay(gdk.DisplayGetDefault(), css, gtk.STYLE_PROVIDER_PRIORITY_SETTINGS)
@@ -157,16 +179,29 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 	gtk.StyleContextAddProviderForDisplay(gdk.DisplayGetDefault(), themeCSS, gtk.STYLE_PROVIDER_PRIORITY_SETTINGS+1)
 
 	self.setCSSTheme(themeCSS)
-	APP.StyleManager().NotifyProperty("dark", func() {
-		self.setCSSTheme(themeCSS)
+	APP.StyleManager().NotifyProperty("dark", func() { self.setCSSTheme(themeCSS) })
+
+	resizeBar := resizebar.NewResizeBar(gtk.OrientationVertical)
+	resizeBar.Attach(&counterTV.Widget)
+	resizeBar.SetMaxWidth(0.4, &self.Window)
+
+	resizeGesture := gtk.NewGestureDrag()
+	resizeBar.AddController(resizeGesture)
+	resizeBar.Gesture().ConnectDragUpdate(func(offsetX float64, offsetY float64) {
+		eventBus.SendSignal(LayoutChanged, &self.Window)
+		self.settings.SetValue(
+			settings.SideBarSize,
+			float64(counterTV.Width())+offsetX,
+		)
 	})
 
 	self.infoBox = NewInfoBox(counters)
-	infoBoxScroll := gtk.NewScrolledWindow()
-	infoBoxScroll.SetChild(self.infoBox)
+	infoScrollView := gtk.NewScrolledWindow()
+	infoScrollView.SetChild(self.infoBox)
 
-	self.homeGrid.Attach(self.treeViewRevealer, 0, 1, 1, 9)
-	self.homeGrid.Attach(infoBoxScroll, 1, 2, 1, 1)
+	self.homeGrid.Attach(self.treeViewRevealer, 0, 0, 1, 1)
+	self.homeGrid.Attach(resizeBar, 1, 0, 1, 1)
+	self.homeGrid.Attach(infoScrollView, 2, 0, 1, 1)
 
 	inputHandler := input.NewDevInput()
 	err := inputHandler.Init(self.settings.GetValue(settings.ActiveKeyboard).(string))
@@ -178,6 +213,20 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 		if err != nil {
 			log.Println("[WARN] Could not initialize keyboard. Got Error: ", err)
 		}
+	})
+
+	self.collapseButton.ConnectClicked(func() {
+		if self.treeViewRevealer.RevealChild() {
+			counterTV.SetSizeRequest(-1, -1)
+			resizeBar.Hide()
+			self.treeViewRevealer.SetRevealChild(false)
+		} else {
+			counterTV.SetSizeRequest(
+				int(self.settings.GetValue(settings.SideBarSize).(float64)), -1)
+			resizeBar.Show()
+			self.treeViewRevealer.SetRevealChild(true)
+		}
+		eventBus.SendSignal(LayoutChanged, &self.Window)
 	})
 
 	eventController := gtk.NewEventControllerKey()
@@ -246,7 +295,43 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 		}
 	})
 
+	EventBus.GetGlobalBus().Subscribe(LayoutChanged, func(...interface{}) {
+		switch {
+		case self.infoBox.Width() < 400:
+			if self.treeViewRevealer.RevealChild() {
+				resizeBar.Hide()
+				self.treeViewRevealer.SetRevealChild(false)
+				self.isRevealerAutoHidden = true
+			}
+			self.collapseButton.SetSensitive(false)
+		case self.Width() > 420+int(self.settings.GetValue(settings.SideBarSize).(float64)):
+			if self.isRevealerAutoHidden {
+				resizeBar.Show()
+				self.treeViewRevealer.SetRevealChild(true)
+				self.isRevealerAutoHidden = false
+			}
+			self.collapseButton.SetSensitive(true)
+		}
+
+		if self.Height() < 360 {
+			self.headerBar.SetVisible(false)
+		} else {
+			self.headerBar.SetVisible(true)
+		}
+	})
+
 	return
+}
+
+func (self *HomeApplicationWindow) ChangeLayout(layout AppLayout) {
+	switch layout {
+	case LayoutPanes:
+		self.overlay.SetChild(self.homeGrid)
+	case LayoutSingleTreeView:
+		self.overlay.SetChild(self.treeViewRevealer)
+	case LayoutSingleInfoBox:
+		self.overlay.SetChild(self.infoBox)
+	}
 }
 
 func (self *HomeApplicationWindow) setCSSTheme(css *gtk.CSSProvider) {
@@ -260,26 +345,6 @@ func (self *HomeApplicationWindow) setCSSTheme(css *gtk.CSSProvider) {
 }
 
 func (self *HomeApplicationWindow) HandleNotify() {
-	switch {
-	case self.Width() < 500:
-		if self.treeViewRevealer.RevealChild() {
-			self.treeViewRevealer.SetRevealChild(false)
-			self.isRevealerAutoHidden = true
-		}
-		self.collapseButton.SetSensitive(false)
-	case self.Width() > 500:
-		if self.isRevealerAutoHidden {
-			self.treeViewRevealer.SetRevealChild(true)
-			self.isRevealerAutoHidden = false
-		}
-		self.collapseButton.SetSensitive(true)
-	}
-
-	if self.Height() < 360 {
-		self.headerBar.SetVisible(false)
-	} else {
-		self.headerBar.SetVisible(true)
-	}
 }
 
 type SaveStrategy string

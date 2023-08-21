@@ -59,7 +59,9 @@ func NewInfoBox(counterList *CounterList) (self *infoBox) {
 	self.AddCSSClass("infoBox")
 	self.SetVExpand(true)
 
-	APP.ActiveWindow().NotifyProperty("default-width", self.handleResize)
+	EventBus.GetGlobalBus().Subscribe(LayoutChanged, func(...interface{}) {
+		self.handleResize()
+	})
 
 	self.isExpanded = true
 	self.Append(self.widgetRevealer)
@@ -84,13 +86,9 @@ func (self *infoBox) getWidgetSlice() (list []infoBoxWidget) {
 	return
 }
 
-func (self *infoBox) Width() int {
-	return self.Parent().(*gtk.Viewport).Width()
-}
-
 func (self *infoBox) handleResize() {
 	switch {
-	case self.Width() < 500 && self.isExpanded:
+	case self.Width() < 560 && self.isExpanded:
 		self.isExpanded = false
 		self.SetWidgets([]widgetType{
 			MainCount,
@@ -100,7 +98,7 @@ func (self *infoBox) handleResize() {
 			LastStepTime,
 			OverallLuck,
 		}, None, true, false)
-	case self.Width() > 500 && !self.isExpanded:
+	case self.Width() > 560 && !self.isExpanded:
 		self.isExpanded = true
 		self.SetWidgets([]widgetType{
 			MainCount + MainTime,

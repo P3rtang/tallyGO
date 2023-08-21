@@ -10,6 +10,10 @@ import (
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 )
 
+const (
+	LayoutChanged EventBus.Signal = "LayoutChanged"
+)
+
 type TreeRowObject interface {
 	Store() *gio.ListStore
 	Model() *gio.ListModel

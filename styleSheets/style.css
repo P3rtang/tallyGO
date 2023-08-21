@@ -21,8 +21,9 @@ headerbar box {
 }
 
 windowcontrols button {
-    padding: 5px;
+    padding: 0px;
     margin-left: 0px;
+    margin-right: 8px;
 }
 
 windowcontrols image {
@@ -33,8 +34,24 @@ dialog {
     background: transparent;
 }
 
-.counterTreeView {
-    padding: 8px;
+paned > separator {
+    margin: 0px;
+    padding: 0px;
+}
+
+.counterTreeView row {
+    margin: 2px;
+    padding: 4px;
+    border-radius: 14px;
+}
+
+.counterTreeView row {
+    margin-left: 16px;
+    margin-right: 8px;
+}
+
+.counterTreeView:first-child {
+    margin-top: 8px;
 }
 
 .counterTreeView .counterRow {
@@ -43,12 +60,6 @@ dialog {
 
 .counterTreeView expander:first-child {
     padding-left: 6px;
-}
-
-.counterTreeView row {
-    margin: 2px;
-    padding: 4px;
-    border-radius: 14px;
 }
 
 .counterTreeView separator {
@@ -78,10 +89,6 @@ dialog {
 
 .counterTreeView #PhaseRow {
     margin-left: 24px;
-}
-
-#treeViewScrollWindow {
-    min-width: 300px;
 }
 
 .settingsListView {
@@ -158,6 +165,10 @@ dialog {
     font-size: 18px;
 }
 
+.infoBox {
+    min-width: 200px;
+}
+
 .infoBoxRow label {
     margin: 8px;
     margin-right: 16px;
@@ -224,5 +235,6 @@ progressbar trough {
 }
 
 #RevealerTitle {
+    margin-top: 28px;
     font-size: 28px;
 }

@@ -37,10 +37,6 @@ row:selected {
     background: #242424;
 }
 
-.counterTreeView {
-    border-right: 1px solid #666666;
-}
-
 .progressGreen progress {
     background: #50FA7B;
 }
