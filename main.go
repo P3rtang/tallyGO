@@ -187,12 +187,12 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 
 	resizeGesture := gtk.NewGestureDrag()
 	resizeBar.AddController(resizeGesture)
-	resizeBar.Gesture().ConnectDragUpdate(func(offsetX float64, offsetY float64) {
-		eventBus.SendSignal(LayoutChanged, &self.Window)
+	resizeBar.Gesture().ConnectDragUpdate(func(offsetX float64, _ float64) {
 		self.settings.SetValue(
 			settings.SideBarSize,
 			float64(counterTV.Width())+offsetX,
 		)
+		eventBus.SendSignal(LayoutChanged, &self.Window)
 	})
 
 	self.infoBox = NewInfoBox(counters)
@@ -296,6 +296,11 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 	})
 
 	EventBus.GetGlobalBus().Subscribe(LayoutChanged, func(...interface{}) {
+		var sidebarWidth int = 0
+		if self.settings.HasValue(settings.SideBarSize) {
+			sidebarWidth = int(self.settings.GetValue(settings.SideBarSize).(float64))
+		}
+
 		switch {
 		case self.infoBox.Width() < 400:
 			if self.treeViewRevealer.RevealChild() {
@@ -304,7 +309,7 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 				self.isRevealerAutoHidden = true
 			}
 			self.collapseButton.SetSensitive(false)
-		case self.Width() > 420+int(self.settings.GetValue(settings.SideBarSize).(float64)):
+		case self.Width() > 420+sidebarWidth:
 			if self.isRevealerAutoHidden {
 				resizeBar.Show()
 				self.treeViewRevealer.SetRevealChild(true)
