@@ -39,6 +39,10 @@ paned > separator {
     padding: 0px;
 }
 
+popover {
+    border-radius: 8px;
+}
+
 .counterTreeView row {
     margin: 2px;
     padding: 4px;

@@ -154,11 +154,14 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 	image := self.settingsButton.Child().(*gtk.Image)
 	image.SetPixelSize(18)
 	self.settingsButton.ConnectToggled(func() {
-		if self.settingsButton.Active() {
-			self.overlay.SetChild(self.settingsGrid)
-		} else {
-			self.overlay.SetChild(self.homeGrid)
-		}
+		popover := self.NewHeaderPopoverMenu()
+		popover.SetParent(self.settingsButton)
+		popover.Show()
+		// if self.settingsButton.Active() {
+		// 	self.overlay.SetChild(self.settingsGrid)
+		// } else {
+		// 	self.overlay.SetChild(self.homeGrid)
+		// }
 	})
 
 	self.headerBar.PackStart(self.collapseButton)
@@ -349,7 +352,23 @@ func (self *HomeApplicationWindow) setCSSTheme(css *gtk.CSSProvider) {
 	}
 }
 
-func (self *HomeApplicationWindow) HandleNotify() {
+func (self *HomeApplicationWindow) NewHeaderPopoverMenu() (popover *gtk.PopoverMenu) {
+	popover = gtk.NewPopoverMenuFromModel(nil)
+
+	menuModel := gio.NewMenu()
+
+	action := gio.NewSimpleAction("preferences", nil)
+	action.ConnectActivate(func(*glib.Variant) {
+		self.overlay.SetChild(self.settingsGrid)
+	})
+	APP.ActiveWindow().AddAction(action)
+
+	menuModel.Append("Preferences", "settings.open")
+	menuModel.Append("About", "")
+
+	popover.SetMenuModel(menuModel)
+
+	return
 }
 
 type SaveStrategy string
