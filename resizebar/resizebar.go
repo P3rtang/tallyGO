@@ -24,7 +24,6 @@ func NewResizeBar(orientation gtk.Orientation) (self *ResizeBar) {
 	}
 
 	self.SetCursorFromName("ew-resize")
-	self.SetSizeRequest(9, -1)
 	if orientation == gtk.OrientationHorizontal {
 		self.separator.SetHExpand(true)
 		self.separator.SetVAlign(gtk.AlignCenter)

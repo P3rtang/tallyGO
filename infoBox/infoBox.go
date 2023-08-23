@@ -1,4 +1,4 @@
-package main
+package infobox
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 
 	. "tallyGo/countable"
 	EventBus "tallyGo/eventBus"
+	"tallyGo/treeview"
 
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"golang.org/x/exp/slices"
@@ -36,7 +37,7 @@ type infoBoxWidget interface {
 	removeCSSClass(name string)
 }
 
-type infoBox struct {
+type InfoBox struct {
 	*gtk.Box
 
 	counterList *CounterList
@@ -46,8 +47,8 @@ type infoBox struct {
 	isExpanded     bool
 }
 
-func NewInfoBox(counterList *CounterList) (self *infoBox) {
-	self = &infoBox{
+func NewInfoBox(counterList *CounterList) (self *InfoBox) {
+	self = &InfoBox{
 		gtk.NewBox(gtk.OrientationVertical, 0),
 		counterList,
 		map[widgetType]infoBoxWidget{},
@@ -59,7 +60,7 @@ func NewInfoBox(counterList *CounterList) (self *infoBox) {
 	self.AddCSSClass("infoBox")
 	self.SetVExpand(true)
 
-	EventBus.GetGlobalBus().Subscribe(LayoutChanged, func(...interface{}) {
+	EventBus.GetGlobalBus().Subscribe("LayoutChanged", func(...interface{}) {
 		self.handleResize()
 	})
 
@@ -73,22 +74,40 @@ func NewInfoBox(counterList *CounterList) (self *infoBox) {
 	}, None, true, true)
 
 	EventBus.GetGlobalBus().Subscribe(ListActiveChanged, func(args ...interface{}) {
-		self.SetCounter(args[0].(Countable))
+		if len(args) == 0 {
+			self.SetCounter(nil)
+		} else {
+			self.SetCounter(args[0].(Countable))
+		}
 	})
 
 	return
 }
 
-func (self *infoBox) getWidgetSlice() (list []infoBoxWidget) {
+func (self *InfoBox) GetWidget() *gtk.Widget {
+	return &self.Widget
+}
+
+func (self *InfoBox) HeaderBar() *gtk.HeaderBar {
+	headerBar := gtk.NewHeaderBar()
+	backButton := gtk.NewButtonFromIconName("go-previous-symbolic")
+	backButton.ConnectClicked(func() {
+		EventBus.GetGlobalBus().SendSignal(treeview.DeselectAll)
+	})
+	headerBar.PackStart(backButton)
+	return headerBar
+}
+
+func (self *InfoBox) getWidgetSlice() (list []infoBoxWidget) {
 	for _, widget := range self.widgets {
 		list = append(list, widget)
 	}
 	return
 }
 
-func (self *infoBox) handleResize() {
+func (self *InfoBox) handleResize() {
 	switch {
-	case self.Width() < 560 && self.isExpanded:
+	case self.Parent().(*gtk.Viewport).Parent().(*gtk.ScrolledWindow).Width() < 560 && self.isExpanded:
 		self.isExpanded = false
 		self.SetWidgets([]widgetType{
 			MainCount,
@@ -98,7 +117,7 @@ func (self *infoBox) handleResize() {
 			LastStepTime,
 			OverallLuck,
 		}, None, true, false)
-	case self.Width() > 560 && !self.isExpanded:
+	case self.Parent().(*gtk.Viewport).Parent().(*gtk.ScrolledWindow).Width() > 560 && !self.isExpanded:
 		self.isExpanded = true
 		self.SetWidgets([]widgetType{
 			MainCount + MainTime,
@@ -109,7 +128,7 @@ func (self *infoBox) handleResize() {
 	}
 }
 
-func (self *infoBox) SetWidgets(widgets []widgetType, setExpand widgetType, showBorder bool, showTitle bool) {
+func (self *InfoBox) SetWidgets(widgets []widgetType, setExpand widgetType, showBorder bool, showTitle bool) {
 	child := self.LastChild()
 	for self.ObserveChildren().NItems() > 0 {
 		self.Box.Remove(child)
@@ -136,13 +155,13 @@ func (self *infoBox) SetWidgets(widgets []widgetType, setExpand widgetType, show
 	self.setRevealer()
 }
 
-func (self *infoBox) setRevealer() {
+func (self *InfoBox) setRevealer() {
 	for _, widget := range self.widgets {
 		widget.connectRevealer(self.widgetRevealer)
 	}
 }
 
-func (self *infoBox) AddWidget(type_ widgetType, showBorder bool) {
+func (self *InfoBox) AddWidget(type_ widgetType, showBorder bool) {
 	countable := Countable(nil)
 	if self.counterList.HasActive() {
 		countable = self.counterList.GetActive()[0]
@@ -192,8 +211,7 @@ func (self *infoBox) AddWidget(type_ widgetType, showBorder bool) {
 	self.setBorder(showBorder)
 }
 
-func (self *infoBox) SetCounter(countable Countable) {
-	self.counterList.GetActive()[0] = countable
+func (self *InfoBox) SetCounter(countable Countable) {
 	for _, widget := range self.widgets {
 		widget.setCounter(countable)
 	}
@@ -201,19 +219,19 @@ func (self *infoBox) SetCounter(countable Countable) {
 	self.widgetRevealer.setCounter(countable)
 }
 
-func (self *infoBox) setBorder(isShown bool) {
+func (self *InfoBox) setBorder(isShown bool) {
 	for _, widget := range self.widgets {
 		widget.setBorder(isShown)
 	}
 }
 
-func (self *infoBox) setTitle(showTitle bool) {
+func (self *InfoBox) setTitle(showTitle bool) {
 	for _, widget := range self.widgets {
 		widget.setTitle(showTitle)
 	}
 }
 
-func (self *infoBox) toggleCSSClass(name string) {
+func (self *InfoBox) toggleCSSClass(name string) {
 	if slices.Contains(self.CSSClasses(), name) {
 		self.RemoveCSSClass(name)
 	} else {
@@ -448,17 +466,11 @@ func (self *countLabel) IncreaseBy(add int) {
 }
 
 func (self *countLabel) setCounter(countable Countable) {
-	if countable == Countable(nil) {
-		return
-	}
 	self.countable = countable
 	self.UpdateCount()
 }
 
 func (self *countLabel) UpdateCount(...interface{}) {
-	if self.countable == Countable(nil) {
-		return
-	}
 	self.labelCount.SetText(self.String())
 }
 
@@ -557,32 +569,27 @@ func (self *timeLabel) IncreaseBy(add int) {
 }
 
 func (self *timeLabel) setCounter(countable Countable) {
-	if countable == Countable(nil) {
-		return
-	}
 	self.countable = countable
 	self.UpdateTime()
 }
 
 func (self *timeLabel) UpdateTime(...interface{}) {
-	if self.countable == Countable(nil) {
-		return
-	}
 	self.labelTime.SetText(self.Time())
 }
 
 func (self *timeLabel) Time() string {
-	var time time.Duration
 	if self.countable != nil {
-		time = self.countable.GetTime()
+		time := self.countable.GetTime()
+		return fmt.Sprintf(
+			"%d:%02d:%02d,%03d",
+			int(time.Hours()),
+			int(time.Minutes())%60,
+			int(time.Seconds())%60,
+			time.Milliseconds()%1000,
+		)
+	} else {
+		return "---"
 	}
-	return fmt.Sprintf(
-		"%d:%02d:%02d,%03d",
-		int(time.Hours()),
-		int(time.Minutes())%60,
-		int(time.Seconds())%60,
-		time.Milliseconds()%1000,
-	)
 }
 
 func (self *timeLabel) AddTime(time time.Duration) {
@@ -655,26 +662,25 @@ type mainProgressBar struct {
 
 func newMainProgressBar() (self *mainProgressBar) {
 	self = &mainProgressBar{
-		gtk.NewBox(gtk.OrientationHorizontal, 0),
-		Countable(nil),
-		nil,
-		nil,
+		Box:         gtk.NewBox(gtk.OrientationHorizontal, 0),
+		countable:   Countable(nil),
+		title:       gtk.NewLabel("Progress"),
+		progressBar: gtk.NewProgressBar(),
 	}
-	title := gtk.NewLabel("Progress")
-	title.SetVisible(false)
-	progressBar := gtk.NewProgressBar()
-	progressBar.SetShowText(true)
-	progressBar.SetVAlign(gtk.AlignCenter)
-	self.Box.AddCSSClass("infoBoxRow")
-	progressBar.AddCSSClass("infoBoxRowProgressBar")
 
-	self.title = title
+	self.title.SetVisible(false)
 	self.title.SetName("title")
-	self.progressBar = progressBar
+
+	self.progressBar.SetShowText(true)
 	self.progressBar.SetHExpand(true)
+	self.progressBar.SetVAlign(gtk.AlignCenter)
+	self.progressBar.AddCSSClass("infoBoxRowProgressBar")
+	self.progressBar.SetFraction(0)
+	self.progressBar.SetText("---")
 
 	self.Box.Append(self.title)
 	self.Box.Append(self.progressBar)
+	self.Box.AddCSSClass("infoBoxRow")
 
 	EventBus.GetGlobalBus().Subscribe(TimeChanged, self.Update)
 
@@ -682,15 +688,14 @@ func newMainProgressBar() (self *mainProgressBar) {
 }
 
 func (self *mainProgressBar) setCounter(countable Countable) {
-	if countable == Countable(nil) {
-		return
-	}
 	self.countable = countable
 	self.Update()
 }
 
 func (self *mainProgressBar) Update(...interface{}) {
 	if self.countable == Countable(nil) {
+		self.progressBar.SetFraction(0)
+		self.progressBar.SetText("---")
 		return
 	}
 	fraction := 1.0 - self.countable.GetProgress()

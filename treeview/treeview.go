@@ -5,13 +5,14 @@ import (
 	. "tallyGo/countable"
 	EventBus "tallyGo/eventBus"
 
-	"github.com/diamondburned/gotk4/pkg/core/glib"
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 )
 
 const (
 	LayoutChanged EventBus.Signal = "LayoutChanged"
+	DeselectAll                   = "DeselectAll"
 )
 
 type TreeRowObject interface {
@@ -50,7 +51,7 @@ func NewCounterTreeView(counters *CounterList) (self *CounterTreeView) {
 				if rowObj == nil {
 					selectionModel.UnselectItem(i)
 					if selectionModel.Item(i).Type().Name() == "GtkTreeExpander" {
-					log.Println("[WARN]\tCould not get Underlying Counter from Selection")
+						log.Println("[WARN]\tCould not get Underlying Counter from Selection")
 					}
 				} else {
 					selection = append(selection, rowObj.Countable())
@@ -92,6 +93,10 @@ func NewCounterTreeView(counters *CounterList) (self *CounterTreeView) {
 		}
 	})
 
+	EventBus.GetGlobalBus().Subscribe(DeselectAll, func(args ...interface{}) {
+		selectionModel.UnselectAll()
+	})
+
 	return
 }
 
@@ -124,6 +129,20 @@ func (self *CounterTreeView) bindRow(listItem *gtk.ListItem) {
 		button := row.Item().Cast().(*gtk.Button)
 		listItem.SetChild(button)
 	}
+}
+
+func (self *CounterTreeView) GetWidget() *gtk.Widget {
+	return &self.Widget
+}
+
+func (self *CounterTreeView) HeaderBar() *gtk.HeaderBar {
+	headerBar := gtk.NewHeaderBar()
+
+	hideSidebarButton := gtk.NewButtonFromIconName("sidebar-show-symbolic")
+	hideSidebarButton.SetActionName("leaflet.toggleSidebar")
+
+	headerBar.PackStart(hideSidebarButton)
+	return headerBar
 }
 
 func (self *CounterTreeView) AddCounter(counter *Counter) {

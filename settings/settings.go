@@ -1,6 +1,7 @@
 package settings
 
 import (
+	EventBus "tallyGo/eventBus"
 	"tallyGo/input"
 
 	"github.com/diamondburned/gotk4/pkg/core/glib"
@@ -8,19 +9,34 @@ import (
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 )
 
+const (
+	// callback arguments (SettingsKey, any)
+	ChangeSetting EventBus.Signal = "ChangeChangeSetting"
+)
+
 type Settings struct {
 	Items     map[SettingsKey]any
 	callbacks map[SettingsKey][]func(value any)
 }
 
-func NewSettings() *Settings {
+func NewSettings() (self *Settings) {
 	items := map[SettingsKey]any{}
 	items[ActiveKeyboard] = input.GetKbdList()[0]
 
 	callbacks := map[SettingsKey][]func(value any){}
 
-	this := &Settings{items, callbacks}
-	return this
+	self = &Settings{items, callbacks}
+
+	return self
+}
+
+func (self *Settings) SetupEvents() {
+	EventBus.GetGlobalBus().Subscribe(ChangeSetting, func(args ...interface{}) {
+		key := args[0].(SettingsKey)
+		val := args[1].(any)
+
+		self.SetValue(key, val)
+	})
 }
 
 func (self *Settings) ConnectChanged(key SettingsKey, f func(value any)) {

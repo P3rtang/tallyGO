@@ -9,9 +9,8 @@ import (
 	. "tallyGo/countable"
 	EventBus "tallyGo/eventBus"
 	"tallyGo/input"
-	"tallyGo/resizebar"
 	"tallyGo/settings"
-	"tallyGo/treeview"
+	"tallyGo/windows"
 	"time"
 
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
@@ -67,40 +66,25 @@ const (
 )
 
 const (
-	// callback arguments (*gtk.Window)
 	LayoutChanged EventBus.Signal = "LayoutChanged"
 )
 
 type HomeApplicationWindow struct {
-	*gtk.ApplicationWindow
+	*adw.ApplicationWindow
 
 	overlay      *gtk.Overlay
-	homeGrid     *gtk.Grid
 	settings     *settings.Settings
 	settingsGrid *settings.SettingsMenu
-	infoBox      *infoBox
 
-	treeViewRevealer     *gtk.Revealer
-	isRevealerAutoHidden bool
-	collapseButton       *gtk.Button
-	settingsButton       *gtk.ToggleButton
-	headerBar            *gtk.HeaderBar
-	isTimingActive       bool
+	isTimingActive bool
 }
 
 func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow) {
 	self = &HomeApplicationWindow{
-		gtk.NewApplicationWindow(&app.Application),
+		adw.NewApplicationWindow(&app.Application),
 		gtk.NewOverlay(),
-		gtk.NewGrid(),
 		nil,
 		nil,
-		nil,
-		gtk.NewRevealer(),
-		false,
-		gtk.NewButtonFromIconName("sidebar-show-symbolic"),
-		gtk.NewToggleButton(),
-		gtk.NewHeaderBar(),
 		false,
 	}
 
@@ -122,57 +106,14 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 	self.settingsGrid.AddItem(settings.Theme)
 
 	counters := NewCounterList(saveDataHandler.CounterData)
-	app.ConnectShutdown(func() {
-		saveDataHandler.CounterData = counters.List
-		saveDataHandler.Save()
-	})
 
-	counterTV := treeview.NewCounterTreeView(counters)
+	homeLeaflet := windows.NewHomeLeaflet(counters, self.settings)
+	self.overlay.SetChild(homeLeaflet)
+	self.SetContent(self.overlay)
 
-	scrollView := gtk.NewScrolledWindow()
-	scrollView.SetPropagateNaturalWidth(true)
-	scrollView.SetChild(counterTV)
-	scrollView.SetName("treeViewScrollWindow")
-
-	self.treeViewRevealer.SetTransitionType(gtk.RevealerTransitionTypeSlideRight)
-	self.treeViewRevealer.SetChild(scrollView)
-	self.treeViewRevealer.SetRevealChild(true)
-
-	self.Window.ConnectShow(func() {
-		if self.settings.HasValue(settings.SideBarSize) {
-			if self.settings.GetValue(settings.SideBarSize).(float64) > INIT_WIDTH {
-				counterTV.SetSizeRequest(240, -1)
-			} else {
-				counterTV.SetSizeRequest(
-					int(self.settings.GetValue(settings.SideBarSize).(float64)), -1)
-			}
-		}
-	})
-
-	self.settingsButton.SetIconName("open-menu-symbolic")
-	self.settingsButton.SetName("settingsButton")
-	image := self.settingsButton.Child().(*gtk.Image)
-	image.SetPixelSize(18)
-	self.settingsButton.ConnectToggled(func() {
-		popover := self.NewHeaderPopoverMenu()
-		popover.SetParent(self.settingsButton)
-		popover.Show()
-		// if self.settingsButton.Active() {
-		// 	self.overlay.SetChild(self.settingsGrid)
-		// } else {
-		// 	self.overlay.SetChild(self.homeGrid)
-		// }
-	})
-
-	self.headerBar.PackStart(self.collapseButton)
-	self.headerBar.PackEnd(self.settingsButton)
-	self.SetTitlebar(self.headerBar)
-
-	self.SetChild(self.overlay)
-	self.overlay.SetChild(self.homeGrid)
 	self.SetDefaultSize(INIT_WIDTH, INIT_HEIGHT)
-	self.NotifyProperty("default-width", func() { EventBus.GetGlobalBus().SendSignal(LayoutChanged, &self.Window) })
-	self.NotifyProperty("default-height", func() { EventBus.GetGlobalBus().SendSignal(LayoutChanged, &self.Window) })
+	self.NotifyProperty("default-width", func() { EventBus.GetGlobalBus().SendSignal(LayoutChanged) })
+	self.NotifyProperty("default-height", func() { EventBus.GetGlobalBus().SendSignal(LayoutChanged) })
 
 	css := gtk.NewCSSProvider()
 	gtk.StyleContextAddProviderForDisplay(gdk.DisplayGetDefault(), css, gtk.STYLE_PROVIDER_PRIORITY_SETTINGS)
@@ -184,28 +125,6 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 	self.setCSSTheme(themeCSS)
 	APP.StyleManager().NotifyProperty("dark", func() { self.setCSSTheme(themeCSS) })
 
-	resizeBar := resizebar.NewResizeBar(gtk.OrientationVertical)
-	resizeBar.Attach(&counterTV.Widget)
-	resizeBar.SetMaxWidth(0.4, &self.Window)
-
-	resizeGesture := gtk.NewGestureDrag()
-	resizeBar.AddController(resizeGesture)
-	resizeBar.Gesture().ConnectDragUpdate(func(offsetX float64, _ float64) {
-		self.settings.SetValue(
-			settings.SideBarSize,
-			float64(counterTV.Width())+offsetX,
-		)
-		eventBus.SendSignal(LayoutChanged, &self.Window)
-	})
-
-	self.infoBox = NewInfoBox(counters)
-	infoScrollView := gtk.NewScrolledWindow()
-	infoScrollView.SetChild(self.infoBox)
-
-	self.homeGrid.Attach(self.treeViewRevealer, 0, 0, 1, 1)
-	self.homeGrid.Attach(resizeBar, 1, 0, 1, 1)
-	self.homeGrid.Attach(infoScrollView, 2, 0, 1, 1)
-
 	inputHandler := input.NewDevInput()
 	err := inputHandler.Init(self.settings.GetValue(settings.ActiveKeyboard).(string))
 	if err != nil {
@@ -216,20 +135,6 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 		if err != nil {
 			log.Println("[WARN] Could not initialize keyboard. Got Error: ", err)
 		}
-	})
-
-	self.collapseButton.ConnectClicked(func() {
-		if self.treeViewRevealer.RevealChild() {
-			counterTV.SetSizeRequest(-1, -1)
-			resizeBar.Hide()
-			self.treeViewRevealer.SetRevealChild(false)
-		} else {
-			counterTV.SetSizeRequest(
-				int(self.settings.GetValue(settings.SideBarSize).(float64)), -1)
-			resizeBar.Show()
-			self.treeViewRevealer.SetRevealChild(true)
-		}
-		eventBus.SendSignal(LayoutChanged, &self.Window)
 	})
 
 	eventController := gtk.NewEventControllerKey()
@@ -298,48 +203,11 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 		}
 	})
 
-	EventBus.GetGlobalBus().Subscribe(LayoutChanged, func(...interface{}) {
-		var sidebarWidth int = 0
-		if self.settings.HasValue(settings.SideBarSize) {
-			sidebarWidth = int(self.settings.GetValue(settings.SideBarSize).(float64))
-		}
-
-		switch {
-		case self.infoBox.Width() < 400:
-			if self.treeViewRevealer.RevealChild() {
-				resizeBar.Hide()
-				self.treeViewRevealer.SetRevealChild(false)
-				self.isRevealerAutoHidden = true
-			}
-			self.collapseButton.SetSensitive(false)
-		case self.Width() > 420+sidebarWidth:
-			if self.isRevealerAutoHidden {
-				resizeBar.Show()
-				self.treeViewRevealer.SetRevealChild(true)
-				self.isRevealerAutoHidden = false
-			}
-			self.collapseButton.SetSensitive(true)
-		}
-
-		if self.Height() < 360 {
-			self.headerBar.SetVisible(false)
-		} else {
-			self.headerBar.SetVisible(true)
-		}
+	APP.ConnectShutdown(func() {
+		saveDataHandler.Save()
 	})
 
 	return
-}
-
-func (self *HomeApplicationWindow) ChangeLayout(layout AppLayout) {
-	switch layout {
-	case LayoutPanes:
-		self.overlay.SetChild(self.homeGrid)
-	case LayoutSingleTreeView:
-		self.overlay.SetChild(self.treeViewRevealer)
-	case LayoutSingleInfoBox:
-		self.overlay.SetChild(self.infoBox)
-	}
 }
 
 func (self *HomeApplicationWindow) setCSSTheme(css *gtk.CSSProvider) {
@@ -357,13 +225,14 @@ func (self *HomeApplicationWindow) NewHeaderPopoverMenu() (popover *gtk.PopoverM
 
 	menuModel := gio.NewMenu()
 
-	action := gio.NewSimpleAction("preferences", nil)
+	action := gio.NewSimpleAction("preferences.open", nil)
 	action.ConnectActivate(func(*glib.Variant) {
-		self.overlay.SetChild(self.settingsGrid)
+		self.overlay.AddOverlay(self.settingsGrid)
 	})
-	APP.ActiveWindow().AddAction(action)
 
-	menuModel.Append("Preferences", "settings.open")
+	APP.AddAction(action)
+
+	menuModel.Append("Preferences", "app.preferences.open")
 	menuModel.Append("About", "")
 
 	popover.SetMenuModel(menuModel)
@@ -421,8 +290,10 @@ func (self *SaveFileHandler) Restore() (err error) {
 	if self.SettingsData == nil {
 		log.Printf("[INFO]\tFound no Settings data in savefile, generating default Settings")
 		self.SettingsData = settings.NewSettings()
+		self.SettingsData.SetupEvents()
 	} else {
 		log.Printf("[INFO]\tFound Settings data in savefile, loading Settings")
+		self.SettingsData.SetupEvents()
 	}
 
 	log.Printf("[INFO]\tLoaded %d Counters\n", len(self.CounterData))

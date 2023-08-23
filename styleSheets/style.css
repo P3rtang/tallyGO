@@ -20,6 +20,23 @@ headerbar box {
     padding: 0px;
 }
 
+actionbar {
+    border-bottom: 1px solid #000000FF;
+}
+
+actionbar button {
+    padding: 5px;
+    min-width: 24px;
+    min-height: 24px;
+    background: none;
+}
+
+actionbar box {
+    padding: 0px;
+    padding-left: 2px;
+    padding-right: 2px;
+}
+
 windowcontrols button {
     padding: 0px;
     margin-left: 0px;
@@ -43,6 +60,10 @@ popover {
     border-radius: 8px;
 }
 
+scrolledwindow {
+    min-width: 240px;
+}
+
 .counterTreeView row {
     margin: 2px;
     padding: 4px;
@@ -54,7 +75,7 @@ popover {
     margin-right: 8px;
 }
 
-.counterTreeView:first-child {
+.counterTreeView {
     margin-top: 8px;
 }
 
