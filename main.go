@@ -175,7 +175,7 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 					countable.IncreaseBy(1)
 				}
 			})
-			saveDataHandler.Save()
+			saveDataHandler.Save(counters)
 
 		case key == input.KeyMinus || key == input.KeyKeypadMinus:
 			if !self.isTimingActive {
@@ -186,7 +186,7 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 					countable.IncreaseBy(-1)
 				}
 			})
-			saveDataHandler.Save()
+			saveDataHandler.Save(counters)
 
 		case key == input.KeyQ:
 			self.isTimingActive = false
@@ -204,7 +204,7 @@ func newHomeApplicationWindow(app *adw.Application) (self *HomeApplicationWindow
 	})
 
 	APP.ConnectShutdown(func() {
-		saveDataHandler.Save()
+		saveDataHandler.Save(counters)
 	})
 
 	return
@@ -264,7 +264,8 @@ func NewSaveFileHandler(path string, strategy SaveStrategy) *SaveFileHandler {
 	}
 }
 
-func (self *SaveFileHandler) Save() (err error) {
+func (self *SaveFileHandler) Save(counters *CounterList) (err error) {
+	self.CounterData = counters.List
 	var saveData []byte
 	if saveData, err = json.Marshal(self); err != nil {
 		return
