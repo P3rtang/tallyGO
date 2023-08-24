@@ -29,11 +29,11 @@ type HomeLeaflet struct {
 	isAutoCollapsed bool
 }
 
-func NewHomeLeaflet(counters *countable.CounterList, settings *settings.Settings) (self *HomeLeaflet) {
+func NewHomeLeaflet(counters *countable.CounterList, stngs *settings.Settings) (self *HomeLeaflet) {
 	self = &HomeLeaflet{
 		Box:             gtk.NewBox(gtk.OrientationHorizontal, 0),
 		counters:        counters,
-		settings:        settings,
+		settings:        stngs,
 		sidebarRevealer: gtk.NewRevealer(),
 		infoBoxRevealer: gtk.NewRevealer(),
 		resizeBar:       resizebar.NewResizeBar(gtk.OrientationVertical),
@@ -46,6 +46,7 @@ func NewHomeLeaflet(counters *countable.CounterList, settings *settings.Settings
 		} else {
 			self.Collapse()
 		}
+		EventBus.GetGlobalBus().SendSignal("LayoutChanged")
 	})
 
 	aGroup := gio.NewSimpleActionGroup()
@@ -66,6 +67,10 @@ func NewHomeLeaflet(counters *countable.CounterList, settings *settings.Settings
 	self.Box.Append(self.infoBoxRevealer)
 
 	self.resizeBar.Attach(&self.sidebar.Widget)
+	self.resizeBar.Gesture().ConnectDragUpdate(func(x, y float64) {
+		self.settings.SetValue(settings.SideBarSize, float64(self.sidebar.Width()))
+		EventBus.GetGlobalBus().SendSignal("LayoutChanged")
+	})
 
 	self.SetupEvents()
 	self.UnCollapse()
@@ -86,11 +91,11 @@ func (self *HomeLeaflet) SetupEvents() {
 	evtBus.Subscribe(treeview.LayoutChanged, func(...interface{}) {
 		sidebarMinWidth := int(self.settings.GetValue(settings.SideBarSize).(float64))
 		infoboxMinWidth := 250
-		if (self.sidebar.Width() < sidebarMinWidth || self.infoBox.Width() < infoboxMinWidth) && !self.IsCollapsed() {
+		if self.Box.Width() < sidebarMinWidth+infoboxMinWidth && !self.IsCollapsed() {
 			self.ActionSetEnabled("leaflet.toggleSidebar", false)
 			self.Collapse()
 			self.isAutoCollapsed = true
-		} else if self.sidebar.Width() > sidebarMinWidth+infoboxMinWidth+40 || self.infoBox.Width() > sidebarMinWidth+infoboxMinWidth+40 {
+		} else if self.Box.Width() > sidebarMinWidth+infoboxMinWidth+24 {
 			self.ActionSetEnabled("leaflet.toggleSidebar", true)
 			if self.isAutoCollapsed {
 				self.UnCollapse()
@@ -118,6 +123,7 @@ func (self *HomeLeaflet) Collapse() {
 		self.sidebar.SetHExpand(true)
 		self.infoBox.SetHExpand(false)
 	}
+	EventBus.GetGlobalBus().SendSignal(infobox.EnableBackButton, true)
 	self.resizeBar.Hide()
 }
 
@@ -131,6 +137,7 @@ func (self *HomeLeaflet) UnCollapse() {
 	} else {
 		self.sidebar.SetSizeRequest(240, -1)
 	}
+			EventBus.GetGlobalBus().SendSignal(infobox.EnableBackButton, false)
 	self.resizeBar.Show()
 }
 

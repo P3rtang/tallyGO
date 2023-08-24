@@ -27,6 +27,11 @@ const (
 	OverallLuck                  = "OverallLuck"
 )
 
+const (
+	LayoutChanged    EventBus.Signal = "LayoutChanged"
+	EnableBackButton                 = "EnableBackButton"
+)
+
 type infoBoxWidget interface {
 	setCounter(countable Countable)
 	setBorder(isShown bool)
@@ -94,6 +99,17 @@ func (self *InfoBox) HeaderBar() *gtk.HeaderBar {
 	backButton.ConnectClicked(func() {
 		EventBus.GetGlobalBus().SendSignal(treeview.DeselectAll)
 	})
+
+	EventBus.GetGlobalBus().Subscribe(EnableBackButton, func(args ...interface{}) {
+		if set, ok := args[0].(bool); ok {
+			if set {
+				backButton.Show()
+			} else {
+				backButton.Hide()
+			}
+		}
+	})
+
 	headerBar.PackStart(backButton)
 	return headerBar
 }
