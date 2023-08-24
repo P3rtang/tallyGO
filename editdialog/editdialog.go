@@ -8,6 +8,7 @@ import (
 	. "tallyGo/countable"
 	"time"
 
+	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 )
@@ -23,10 +24,11 @@ type EditDialog struct {
 }
 
 func NewEditDialog(countable Countable) *EditDialog {
-	var mainWindow *gtk.ApplicationWindow
+	var mainWindow *adw.ApplicationWindow
 	var ok bool
-	if mainWindow, ok = gtk.WindowListToplevels()[0].(*gtk.ApplicationWindow); !ok {
+	if mainWindow, ok = gtk.WindowListToplevels()[0].(*adw.ApplicationWindow); !ok {
 		log.Println("[WARN]\tCould not find the root ApplicationWindow,\nis there more than one window opened")
+		return nil
 	}
 
 	window := gtk.NewDialog()
