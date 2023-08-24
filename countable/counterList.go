@@ -89,9 +89,15 @@ func (self *CounterList) Completed() (completed int) {
 	for _, c := range self.List {
 		switch c.GetProgressType() {
 		case SOS:
-			completed += 1
+			if c.IsCompleted() {
+				completed += 1
+			}
 		default:
-			completed += len(c.Phases)
+			for _, p := range c.Phases {
+				if p.IsCompleted {
+					completed += 1
+				}
+			}
 		}
 	}
 	return

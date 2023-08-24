@@ -122,6 +122,7 @@ func (self *InfoBox) getWidgetSlice() (list []infoBoxWidget) {
 }
 
 func (self *InfoBox) handleResize() {
+	// TODO: this is leaking memory big time
 	switch {
 	case self.Parent().(*gtk.Viewport).Parent().(*gtk.ScrolledWindow).Width() < 560 && self.isExpanded:
 		self.isExpanded = false
@@ -827,13 +828,14 @@ func newStepTime() (self *stepTime) {
 }
 
 func (self *stepTime) setCounter(countable Countable) {
-	if countable == Countable(nil) {
-		return
-	}
 	self.countable = countable
 }
 
 func (self *stepTime) Update(...interface{}) {
+	if self.countable == nil {
+		self.label.SetText("---")
+		return
+	}
 	var stepTime time.Duration
 	if self.countable.GetCount() != 0 {
 		stepTime = time.Duration(int(self.countable.GetTime())/self.countable.GetCount() + 1)
@@ -935,6 +937,10 @@ func (self *lastStepTime) setCounter(countable Countable) {
 }
 
 func (self *lastStepTime) Update(...interface{}) {
+	if self.countable == nil {
+		self.label.SetText("---")
+		return
+	}
 	if self.lastTime == -1 {
 		self.lastTime = self.countable.GetTime()
 		return
