@@ -137,7 +137,7 @@ func (self *HomeLeaflet) UnCollapse() {
 	} else {
 		self.sidebar.SetSizeRequest(240, -1)
 	}
-			EventBus.GetGlobalBus().SendSignal(infobox.EnableBackButton, false)
+	EventBus.GetGlobalBus().SendSignal(infobox.EnableBackButton, false)
 	self.resizeBar.Show()
 }
 
