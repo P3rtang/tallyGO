@@ -137,6 +137,9 @@ func (self *CounterTreeView) GetWidget() *gtk.Widget {
 
 func (self *CounterTreeView) HeaderBar() *gtk.HeaderBar {
 	headerBar := gtk.NewHeaderBar()
+	title := gtk.NewLabel("")
+	title.SetMarkup("<b>Counters</b>")
+	headerBar.SetTitleWidget(title)
 
 	hideSidebarButton := gtk.NewButtonFromIconName("sidebar-show-symbolic")
 	hideSidebarButton.SetActionName("leaflet.toggleSidebar")
