@@ -829,6 +829,7 @@ func newStepTime() (self *stepTime) {
 
 func (self *stepTime) setCounter(countable Countable) {
 	self.countable = countable
+	self.Update()
 }
 
 func (self *stepTime) Update(...interface{}) {
@@ -1127,18 +1128,15 @@ func shortFormatTime(duration time.Duration) (format string) {
 		)
 	case stepMins < 60:
 		format = fmt.Sprintf(
-			"%02dm %02ds %03d",
+			"%02dm %02ds",
 			int(duration.Minutes()),
 			int(duration.Seconds())%60,
-			duration.Milliseconds()%1000,
 		)
 	default:
 		format = fmt.Sprintf(
-			"%02dh %02dm %02ds %03d",
+			"%02dh %02dm",
 			int(duration.Hours()),
 			int(duration.Minutes())%60,
-			int(duration.Seconds())%60,
-			duration.Milliseconds()%1000,
 		)
 	}
 	return
